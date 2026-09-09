@@ -3,6 +3,12 @@ import { db } from '@/lib/db';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
+// Same reason as the root layout: this queries the database directly,
+// so it can't be generated at build time (the production database may
+// not even have its tables/migrations applied yet during the build
+// step). Generate it fresh on request instead.
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [categories, products] = await Promise.all([
     db.category.findMany({
