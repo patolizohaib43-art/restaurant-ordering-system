@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     const trackingToken = generateSecureToken(24);
 
-    const order = await db.$transaction(async (tx: typeof db) => {
+    const order = await db.$transaction(async (tx) => {
       const orderNumber = await generateOrderNumber(tx);
 
       const created = await tx.order.create({
