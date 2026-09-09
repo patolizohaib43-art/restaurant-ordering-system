@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
+// This page (and its parent CustomerLayout, which loads live restaurant
+// settings from the database) must never be statically prerendered at
+// build time — the database isn't reachable during the Vercel build
+// step, and the settings/order status here need to be fresh on every
+// request anyway. See the same pattern on menu/, deals/, product/, etc.
+export const dynamic = 'force-dynamic';
+
 export default function TrackLayout({ children }: { children: React.ReactNode }) {
   return children;
 }

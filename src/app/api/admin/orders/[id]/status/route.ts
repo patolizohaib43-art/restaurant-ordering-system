@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const session = await getAdminSession();
 
-      const updated = await db.$transaction(async (tx) => {
+    const updated = await db.$transaction(async (tx) => {
       const result = await tx.order.update({
         where: { id: params.id },
         data: { status },

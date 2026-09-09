@@ -6,6 +6,15 @@ import { BottomNav } from '@/components/customer/BottomNav';
 import { StickyCart } from '@/components/customer/StickyCart';
 import { getPublicSettings } from '@/lib/settings';
 
+// This layout wraps every (customer) page and loads live restaurant
+// settings from the database on every render. That means none of its
+// child routes can be statically prerendered at build time (the
+// database isn't reachable during the Vercel build step, and this data
+// — opening hours, "accepting orders" toggle — must always be fresh
+// anyway). Setting it here at the route-group root covers every child
+// page in one place, including client-component pages like cart/,
+// track/, and review/[token]/ that can't export their own `dynamic`
+// config.
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {

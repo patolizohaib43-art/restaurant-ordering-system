@@ -6,6 +6,17 @@ import { OfflineBanner } from '@/components/shared/OfflineBanner';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
+// The root layout's generateMetadata() below reads live restaurant
+// settings from the database. Any auto-generated route that has no page
+// of its own to control this (e.g. Next.js's built-in /_not-found)
+// still renders through this root layout, so without this flag Next.js
+// tries to prerender them at build time — when the database isn't
+// reachable — and the build fails. Forcing dynamic here, app-wide,
+// guarantees nothing under this layout is ever prerendered at build
+// time, regardless of whether an individual page remembers to set its
+// own `dynamic` export.
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getPublicSettings();
   const title = settings.restaurantName || 'Zaiqa-e-Sindh';
