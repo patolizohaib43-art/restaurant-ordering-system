@@ -1,0 +1,442 @@
+// ==========================================================
+// Restaurant Online Ordering & Management System
+// Prisma Schema — Phase 1
+//
+// Design goals:
+// - Portable: plain PostgreSQL, no Vercel-only extensions
+// - Extensible: new features (loyalty points, multi-branch,
+//   delivery riders, etc.) can be added without breaking
+//   existing relations
+// - Safe: customer orders are accessed only via a secure
+//   random "trackingToken", never by guessable sequential ID
+// ==========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------------
+
+enum AdminRole {
+  SUPER_ADMIN
+  MANAGER
+  STAFF
+}
+
+enum OrderType {
+  DELIVERY
+  PICKUP
+  DINE_IN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  CARD
+  ONLINE_WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum NotificationType {
+  NEW_ORDER
+  ORDER_STATUS_CHANGE
+  NEW_REVIEW
+  LOW_STOCK
+  SYSTEM
+}
+
+// Phase 4: thermal receipt printing — the two widths supported by
+// virtually all thermal receipt printers used by small restaurants.
+enum ReceiptWidth {
+  MM_58
+  MM_80
+}
+
+// ------------------------------------------------------------------
+// ADMIN & AUTH
+// ------------------------------------------------------------------
+
+model Admin {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(STAFF)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  statusChanges OrderStatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@map("admins")
+}
+
+// ------------------------------------------------------------------
+// MENU: CATEGORY / PRODUCT / ADDON
+// ------------------------------------------------------------------
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  name            String
+  slug            String   @unique
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  discountPrice   Decimal? @db.Decimal(10, 2)
+  imageUrl        String?
+  isAvailable     Boolean  @default(true)
+  isFeatured      Boolean  @default(false)
+  isPopular       Boolean  @default(false)
+  preparationTime Int? // minutes
+  calories        Int?
+  sortOrder       Int      @default(0)
+
+  addons     ProductAddon[]
+  orderItems OrderItem[]
+  reviews    Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([slug])
+  @@index([isAvailable, isFeatured])
+  @@map("products")
+}
+
+model ProductAddon {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  name        String
+  price       Decimal @db.Decimal(10, 2)
+  isAvailable Boolean @default(true)
+  maxQuantity Int     @default(1)
+
+  orderItemAddons OrderItemAddon[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@map("product_addons")
+}
+
+// ------------------------------------------------------------------
+// PROMOTIONS: DEAL / COUPON
+// ------------------------------------------------------------------
+
+model Deal {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  imageUrl        String?
+  discountType    DiscountType
+  discountValue   Decimal      @db.Decimal(10, 2)
+  minOrderAmount  Decimal?     @db.Decimal(10, 2)
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean      @default(true)
+
+  // Phase 5: orders that redeemed this deal — powers real Deal Performance
+  // analytics instead of estimated/fake numbers.
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startDate, endDate])
+  @@map("deals")
+}
+
+model Coupon {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  description       String?
+  discountType      DiscountType
+  discountValue     Decimal      @db.Decimal(10, 2)
+  minOrderAmount    Decimal?     @db.Decimal(10, 2)
+  maxDiscountAmount Decimal?     @db.Decimal(10, 2)
+  usageLimit        Int?
+  usedCount         Int          @default(0)
+  isActive          Boolean      @default(true)
+  validFrom         DateTime
+  validUntil        DateTime
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive, validFrom, validUntil])
+  @@map("coupons")
+}
+
+// ------------------------------------------------------------------
+// ORDERS
+// ------------------------------------------------------------------
+
+model Order {
+  id          String @id @default(cuid())
+
+  // Human-friendly reference shown to staff (e.g. "ORD-20260905-0001")
+  orderNumber String @unique
+
+  // Secure, high-entropy random token used by customers to view their
+  // own order status without needing an account. This must NEVER be
+  // sequential or guessable. Generated via crypto.randomBytes.
+  trackingToken String @unique
+
+  customerName  String
+  customerPhone String
+  customerEmail String?
+
+  orderType            OrderType @default(DELIVERY)
+  deliveryAddress      String?
+  area                 String?
+  deliveryInstructions String?
+
+  subtotal       Decimal @db.Decimal(10, 2)
+  discountAmount Decimal @default(0) @db.Decimal(10, 2)
+  deliveryFee    Decimal @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(10, 2)
+  totalAmount    Decimal @db.Decimal(10, 2)
+
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  // Phase 5: which promotional deal (if any) the customer redeemed on this
+  // order. Nullable/SetNull so deleting a deal never breaks order history.
+  // This is the real link that makes Deal Performance reporting possible —
+  // previously deals were shown to customers but never recorded on orders.
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod @default(CASH_ON_DELIVERY)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  estimatedDeliveryTime DateTime?
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  reviews       Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([trackingToken])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([dealId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  // Snapshots: preserve historical accuracy even if the product
+  // is later renamed, repriced, or deleted.
+  productName String
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int
+  subtotal    Decimal @db.Decimal(10, 2)
+
+  specialInstructions String?
+
+  addons OrderItemAddon[]
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderItemAddon {
+  id          String    @id @default(cuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  addonId String?
+  addon   ProductAddon? @relation(fields: [addonId], references: [id], onDelete: SetNull)
+
+  // Snapshots for the same reason as OrderItem
+  addonName String
+  price     Decimal @db.Decimal(10, 2)
+  quantity  Int     @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderItemId])
+  @@map("order_item_addons")
+}
+
+model OrderStatusHistory {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status  OrderStatus
+  note    String?
+
+  changedById String?
+  changedBy   Admin?  @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_status_history")
+}
+
+// ------------------------------------------------------------------
+// REVIEWS
+// ------------------------------------------------------------------
+
+model Review {
+  id      String  @id @default(cuid())
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  customerName String
+  rating       Int // 1-5, enforced in application/validation layer
+  comment      String?
+  isApproved   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A customer may leave at most one review per product per order —
+  // this is the duplicate-review guard referenced by the review API.
+  @@unique([orderId, productId])
+  @@index([productId])
+  @@index([isApproved])
+  @@map("reviews")
+}
+
+// ------------------------------------------------------------------
+// SETTINGS (single-row configuration table)
+// ------------------------------------------------------------------
+
+model RestaurantSettings {
+  id String @id @default(cuid())
+
+  restaurantName    String  @default("My Restaurant")
+  // Short brand line shown under the restaurant name (header, hero,
+  // admin login, PWA metadata) — e.g. "Fast Food BBQ & Pizza".
+  tagline           String? @default("")
+  logoUrl           String?
+  address           String?
+  phone             String?
+  email             String?
+  openingHours      Json? // e.g. { "mon": "09:00-22:00", ... }
+  deliveryFee       Decimal @default(0) @db.Decimal(10, 2)
+  minOrderAmount    Decimal @default(0) @db.Decimal(10, 2)
+  taxPercentage     Decimal @default(0) @db.Decimal(5, 2)
+  isAcceptingOrders Boolean @default(true)
+  currency          String  @default("USD")
+
+  // ---------------- Phase 4: printing & notifications ----------------
+  // Which thermal paper width the admin's printer uses. Drives the
+  // print layout only — never trusted for anything financial.
+  receiptWidth ReceiptWidth @default(MM_80)
+  // If true, the admin panel attempts to open the print dialog
+  // automatically when a new order notification arrives. Browsers may
+  // block this if it isn't triggered by a direct user gesture — see
+  // the Phase 4 completion notes for the documented limitation.
+  autoPrintNewOrders Boolean @default(false)
+  // Lets the admin mute the new-order notification sound without
+  // losing the visual/badge notification.
+  notificationSoundEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("restaurant_settings")
+}
+
+// ------------------------------------------------------------------
+// NOTIFICATIONS (admin-facing)
+// ------------------------------------------------------------------
+
+model Notification {
+  id             String           @id @default(cuid())
+  type           NotificationType
+  title          String
+  message        String
+  isRead         Boolean          @default(false)
+  relatedOrderId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
