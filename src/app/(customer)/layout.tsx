@@ -9,7 +9,7 @@ import { getPublicSettings } from '@/lib/settings';
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
-
+  const settings = await getPublicSettings();
 
   return (
     <CartProvider>
