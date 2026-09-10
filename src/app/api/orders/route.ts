@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         data: {
           type: 'NEW_ORDER',
           title: 'New Order Received',
-          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount, 'PKR')}\n${orderTypeLabel}`,
+          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount.toString(), 'PKR')}\n${orderTypeLabel}`,
           relatedOrderId: created.id,
         },
       });
