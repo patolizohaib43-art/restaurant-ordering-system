@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import sharp from 'sharp';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAdminSession } from '@/lib/auth';
-import { getUploadDir, getPublicUploadPrefix, isUploadFolder, UPLOAD_FOLDERS } from '@/lib/uploads';
+import { getUploadDir, getPublicUploadPrefix, isUploadFolder } from '@/lib/uploads';
 
 export const runtime = 'nodejs';
 
@@ -127,7 +127,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Exposed for reference/tests; keeps the whitelist visible alongside the
-// route that enforces it.
-export { UPLOAD_FOLDERS };
