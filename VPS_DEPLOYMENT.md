@@ -120,6 +120,35 @@ chmod 600 .env
 
 ---
 
+## 5b. Image uploads (persistent storage)
+
+By default, uploaded product/category/deal/restaurant images are written
+to `public/uploads` inside the app folder. That's fine for a quick test,
+but it means a `git pull` + rebuild could sit alongside your own tracked
+files — cleaner to keep uploads in their own persistent location outside
+the source tree entirely. Recommended layout:
+
+```bash
+sudo mkdir -p /var/www/zaika-e-sindh/uploads/{products,categories,deals,restaurant}
+sudo chown -R APP_USER:APP_USER /var/www/zaika-e-sindh/uploads
+```
+
+Then add to `.env`:
+
+```bash
+UPLOAD_DIR="/var/www/zaika-e-sindh/uploads"
+```
+
+Nothing else changes — the app automatically serves these through
+`/api/uploads/...` instead of the static `/uploads/...` path once
+`UPLOAD_DIR` points outside `public/`. Restart the app (`pm2 restart
+restaurant-app`) after changing this.
+
+Back this folder up the same way as the database (see the Backups
+section below) — it's the one thing a redeploy can't recreate.
+
+---
+
 ## 6. Install dependencies and build
 
 ```bash

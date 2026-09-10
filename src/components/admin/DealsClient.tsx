@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, Pencil, Trash2, Loader2, Tag as TagIcon, Ticket } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
+import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { formatCurrency } from '@/utils';
 
 interface Deal {
@@ -24,6 +25,7 @@ interface FormState {
   id: string | null;
   title: string;
   description: string;
+  imageUrl: string;
   discountType: 'PERCENTAGE' | 'FIXED';
   discountValue: string;
   minOrderAmount: string;
@@ -40,6 +42,7 @@ const EMPTY_FORM: FormState = {
   id: null,
   title: '',
   description: '',
+  imageUrl: '',
   discountType: 'PERCENTAGE',
   discountValue: '',
   minOrderAmount: '',
@@ -79,6 +82,7 @@ export function DealsClient() {
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
+        imageUrl: form.imageUrl.trim() || undefined,
         discountType: form.discountType,
         discountValue: parseFloat(form.discountValue),
         minOrderAmount: form.minOrderAmount ? parseFloat(form.minOrderAmount) : null,
@@ -184,6 +188,7 @@ export function DealsClient() {
                       id: deal.id,
                       title: deal.title,
                       description: deal.description ?? '',
+                      imageUrl: deal.imageUrl ?? '',
                       discountType: deal.discountType,
                       discountValue: deal.discountValue,
                       minOrderAmount: deal.minOrderAmount ?? '',
@@ -237,6 +242,11 @@ export function DealsClient() {
                   className="input resize-none"
                 />
               </label>
+              <ImageUploadField
+                value={form.imageUrl}
+                onChange={(url) => setForm({ ...form, imageUrl: url })}
+                folder="deals"
+              />
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-gray-700">Type</span>

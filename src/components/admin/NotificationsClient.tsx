@@ -86,7 +86,7 @@ export function NotificationsClient() {
                 className="block"
               >
                 <p className="text-sm font-semibold text-gray-900">{n.title}</p>
-                <p className="mt-0.5 text-sm text-gray-600">{n.message}</p>
+                <p className="mt-0.5 whitespace-pre-line text-sm text-gray-600">{n.message}</p>
                 <p className="mt-1 text-xs text-gray-400">
                   {new Date(n.createdAt).toLocaleString(undefined, {
                     dateStyle: 'medium',

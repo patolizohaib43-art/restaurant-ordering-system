@@ -5,6 +5,7 @@ import { createOrderSchema } from '@/validation/schemas';
 import { priceOrder, PricingError } from '@/lib/pricing';
 import { generateOrderNumber, generateSecureToken } from '@/lib/tokens';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { formatCurrency } from '@/utils';
 
 // Abuse protection: caps how many orders a single IP can place in a short
 // window (a genuine customer never needs more than this). See
@@ -96,11 +97,18 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const orderTypeLabel =
+        input.orderType === 'DELIVERY'
+          ? 'Delivery'
+          : input.orderType === 'PICKUP'
+            ? 'Pickup'
+            : 'Dine-in';
+
       await tx.notification.create({
         data: {
           type: 'NEW_ORDER',
-          title: 'New order received',
-          message: `Order ${orderNumber} placed by ${input.customerName.trim()}.`,
+          title: 'New Order Received',
+          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount, 'PKR')}\n${orderTypeLabel}`,
           relatedOrderId: created.id,
         },
       });

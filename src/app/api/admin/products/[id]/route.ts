@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
+import { deleteUploadedFileIfManaged } from '@/lib/uploads';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -51,6 +52,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return apiError('Sale price must be lower than the regular price.');
     }
 
+    // If the image is being changed or cleared, delete the old file we
+    // were managing (no-op for external URLs or if it's unchanged).
+    if (data.imageUrl !== undefined) {
+      const existing = await db.product.findUnique({
+        where: { id: params.id },
+        select: { imageUrl: true },
+      });
+      if (existing && existing.imageUrl !== data.imageUrl) {
+        await deleteUploadedFileIfManaged(existing.imageUrl);
+      }
+    }
+
     const product = await db.product.update({ where: { id: params.id }, data });
     return apiSuccess(product);
   } catch (error: any) {
@@ -62,7 +75,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const existing = await db.product.findUnique({
+      where: { id: params.id },
+      select: { imageUrl: true },
+    });
     await db.product.delete({ where: { id: params.id } });
+    if (existing) await deleteUploadedFileIfManaged(existing.imageUrl);
     return apiSuccess({ deleted: true });
   } catch (error: any) {
     if (error?.code === 'P2025') return apiError('Product not found.', 404);

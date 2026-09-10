@@ -215,6 +215,7 @@ function RestaurantProfileSection({
       <ImageUploadField
         value={settings.logoUrl ?? ''}
         onChange={(url) => onSave({ logoUrl: url })}
+        folder="restaurant"
       />
       <p className="mt-1 text-[11px] text-gray-400">
         Shown in the header, hero section, and receipts.

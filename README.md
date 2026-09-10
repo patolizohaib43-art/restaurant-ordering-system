@@ -231,6 +231,8 @@ included, since it depends on the specific printer hardware chosen.
 
 - **Admin:** new order, new review, unread count, mark-as-read /
   mark-all-read, optional sound (`notificationSoundEnabled` setting).
+  New-order messages include the order number, customer, total, and
+  order type (delivery/pickup/dine-in).
 - **Customer:** status-change messages surfaced on the tracking page,
   plus an optional browser Notification permission
   (`NotificationPrompt.tsx`) — entirely optional; the app works
@@ -238,12 +240,62 @@ included, since it depends on the specific printer hardware chosen.
 - Implemented via polling (see `POLL_INTERVAL_MS` in the tracking page
   and the admin notification bell), not WebSockets — this keeps the
   app fully compatible with serverless hosting, where long-lived
-  connections aren't available. Polling intervals are kept modest to
-  avoid unnecessary load.
+  connections aren't available. Polling intervals are kept modest, and
+  the admin bell pauses polling entirely while the browser tab is
+  hidden (resuming immediately when it's focused again).
+- **Privacy:** the in-app notification panel shows full order details;
+  OS-level browser notifications (visible on a lock screen or to anyone
+  glancing at the device) intentionally omit the customer's name and
+  order total, showing only the order number and type.
+- **Sound:** a short single beep (Web Audio API), not a loop — respects
+  the browser's autoplay policy and simply stays silent if the browser
+  blocks it, without breaking the rest of the notification.
+- **Web Push (true background push, browser fully closed): not
+  implemented.** This requires a service worker, VAPID keys, a
+  `push` subscription stored per admin device, and a server-side push
+  sender — meaningful extra infrastructure that wasn't justified for a
+  single-restaurant admin panel that's normally open during service
+  hours. The Web Notifications API used here only fires while the
+  admin panel tab is open (foreground or background tab, not fully
+  closed), which is why the in-app bell + badge remains the source of
+  truth and always works regardless of notification permission.
 
 ---
 
-## Reports
+## Image Uploads
+
+Product, category, deal, and restaurant-logo images support direct
+upload from the admin panel (gallery/file picker — no manual URL
+copy-pasting required), alongside the option to paste an external image
+URL instead.
+
+- **Validation:** uploads are checked by their actual file bytes (not
+  just the claimed MIME type or filename), capped at 5MB, and limited
+  to JPEG/PNG/WEBP/GIF. Every upload requires an authenticated admin
+  session.
+- **Optimization:** non-GIF images are automatically resized (max 1600px
+  on the longest side, never upscaled) and re-encoded to WebP before
+  being stored — smaller files, faster menu loads. Animated GIFs are
+  stored as-is to preserve the animation.
+- **Storage location:** controlled by the `UPLOAD_DIR` environment
+  variable (see `.env.example`).
+  - **Unset (Vercel demo / local dev):** defaults to `public/uploads`,
+    served automatically as static files. On Vercel's serverless
+    filesystem this is **ephemeral** — uploaded files can disappear on
+    the next deploy or cold start, which is why the demo also accepts a
+    plain image URL as a fallback.
+  - **Set to a VPS path** (e.g. `/var/www/zaika-e-sindh/uploads`):
+    files persist normally across restarts and deploys, organized into
+    `products/`, `categories/`, `deals/`, and `restaurant/`
+    subfolders, and served through `/api/uploads/...`. See
+    `VPS_DEPLOYMENT.md` → "Image uploads (persistent storage)" for the
+    one-time folder + permissions setup.
+- **Cleanup:** replacing or removing an image (or deleting the product
+  /category/deal it belongs to) deletes the old file from disk — but
+  only files this app manages under `UPLOAD_DIR`; pasted external URLs
+  are never touched.
+
+---
 
 `src/lib/reports.ts` computes sales totals, order status distribution,
 top products, category performance, coupon/deal analytics, and daily

@@ -47,6 +47,7 @@ export function ThermalReceipt({
   return (
     <div id="thermal-receipt" className={`receipt-root ${widthClass}`}>
       <div className="receipt-center receipt-bold receipt-name">{settings.restaurantName}</div>
+      <div className="receipt-center receipt-tagline">Fast Food BBQ &amp; Pizza</div>
       {settings.phone && <div className="receipt-center">Phone: {settings.phone}</div>}
       {settings.address && <div className="receipt-center">Address: {settings.address}</div>}
 
@@ -141,7 +142,8 @@ export function ThermalReceipt({
 
       <div className="receipt-divider" />
 
-      <div className="receipt-center receipt-bold">Thank You!</div>
+      <div className="receipt-center receipt-bold">Thank You for Ordering!</div>
+      <div className="receipt-center receipt-brand-footer">Developed by ZAP Tech — Zohaib Ahmed Patoli</div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { getRestaurantTimeZone, getWeekdayInTimeZone, getMinutesSinceMidnightInTimeZone } from '@/lib/timezone';
+import { deleteUploadedFileIfManaged } from '@/lib/uploads';
 
 export interface OpeningHoursDay {
   open: string; // "11:00"
@@ -103,6 +104,11 @@ export interface UpdatePrintSettingsInput {
 /** Updates the Phase 4 print/notification fields plus basic brand profile fields. */
 export async function updatePrintSettings(input: UpdatePrintSettingsInput) {
   const current = await getRestaurantSettings();
+
+  if (input.logoUrl !== undefined && current.logoUrl !== input.logoUrl) {
+    await deleteUploadedFileIfManaged(current.logoUrl);
+  }
+
   const updated = await db.restaurantSettings.update({
     where: { id: current.id },
     data: {

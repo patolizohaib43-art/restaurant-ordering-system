@@ -207,7 +207,11 @@ export function ProductForm({
         />
       </label>
 
-      <ImageUploadField value={values.imageUrl} onChange={(url) => update('imageUrl', url)} />
+      <ImageUploadField
+        value={values.imageUrl}
+        onChange={(url) => update('imageUrl', url)}
+        folder="products"
+      />
 
       <div className="space-y-2.5 rounded-2xl border border-gray-100 bg-gray-50 p-3.5">
         <label className="flex items-center justify-between text-sm text-gray-700">

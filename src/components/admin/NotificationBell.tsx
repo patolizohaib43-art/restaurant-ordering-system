@@ -88,6 +88,9 @@ export function NotificationBell() {
     let cancelled = false;
 
     async function poll() {
+      // Skip the network round-trip while the tab isn't visible — no
+      // point polling for a UI nobody is looking at.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const res = await fetch('/api/admin/notifications?limit=30', { cache: 'no-store' });
         const json = await res.json();
@@ -102,7 +105,13 @@ export function NotificationBell() {
           if (opSettings.current.soundEnabled) playBeep();
           if (typeof window !== 'undefined' && Notification.permission === 'granted') {
             const latest = newOnes[0];
-            new Notification(latest.title, { body: latest.message });
+            // OS-level notifications are visible on the lock screen and to
+            // anyone glancing at the device, so keep them to the order
+            // number and type only — full details (customer name, total)
+            // stay inside the in-app panel.
+            const lines = latest.message.split('\n');
+            const safeBody = [lines[0], lines[2]].filter(Boolean).join(' • ');
+            new Notification(latest.title, { body: safeBody || latest.message, tag: latest.id });
           }
 
           if (opSettings.current.autoPrint) {
@@ -131,9 +140,14 @@ export function NotificationBell() {
 
     poll();
     const interval = setInterval(poll, POLL_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') poll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
@@ -245,7 +259,9 @@ export function NotificationBell() {
                       className={`block px-4 py-3 ${!n.isRead ? 'bg-brand-50/50' : ''}`}
                     >
                       <p className="text-sm font-medium text-gray-900">{n.title}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{n.message}</p>
+                      <p className="mt-0.5 line-clamp-2 whitespace-pre-line text-xs text-gray-500">
+                        {n.message}
+                      </p>
                       <p className="mt-1 text-[11px] text-gray-400">
                         {new Date(n.createdAt).toLocaleString(undefined, {
                           hour: '2-digit',

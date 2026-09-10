@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Loader2, FolderOpen } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
+import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { slugify } from '@/utils';
 
 interface Category {
@@ -249,15 +250,11 @@ export function CategoriesClient() {
                   className="input resize-none"
                 />
               </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-gray-700">Image URL</span>
-                <input
-                  value={form.imageUrl}
-                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                  className="input"
-                  placeholder="https://..."
-                />
-              </label>
+              <ImageUploadField
+                value={form.imageUrl}
+                onChange={(url) => setForm({ ...form, imageUrl: url })}
+                folder="categories"
+              />
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
