@@ -81,6 +81,23 @@ const DAYS: { key: string; label: string }[] = [
   { key: 'sun', label: 'Sun' },
 ];
 
+// Same shape as OperationalSettings for editing, except the numeric
+// fields (stored/displayed as strings, matching Prisma Decimal
+// serialization) can also be set from a plain number when saving — the
+// number inputs below produce numbers, and the backend's Zod schema
+// expects numbers for these fields too.
+type SettingsPatch = Omit<
+  Partial<OperationalSettings>,
+  'deliveryFee' | 'minOrderAmount' | 'freeDeliveryAboveAmount' | 'taxPercentage'
+> & {
+  deliveryFee?: number;
+  minOrderAmount?: number;
+  freeDeliveryAboveAmount?: number | null;
+  taxPercentage?: number;
+};
+
+const NUMERIC_KEYS = ['deliveryFee', 'minOrderAmount', 'freeDeliveryAboveAmount', 'taxPercentage'] as const;
+
 export function PrintSettingsClient() {
   const [settings, setSettings] = useState<OperationalSettings | null>(null);
   const [error, setError] = useState(false);
@@ -103,10 +120,21 @@ export function PrintSettingsClient() {
     load();
   }, [load]);
 
-  async function save(patch: Partial<OperationalSettings>) {
+  async function save(patch: SettingsPatch) {
     if (!settings) return;
-    const next = { ...settings, ...patch };
-    setSettings(next); // optimistic
+    // Optimistic local update: OperationalSettings stores these 4 fields
+    // as strings (matching what GET returns), so numbers from the patch
+    // are stringified here — only for the in-memory preview, not for
+    // what gets sent to the API below.
+    const displayPatch: Partial<OperationalSettings> = { ...patch };
+    for (const key of NUMERIC_KEYS) {
+      const value = patch[key];
+      if (value !== undefined) {
+        (displayPatch as Record<string, unknown>)[key] = value === null ? null : value.toString();
+      }
+    }
+    const next = { ...settings, ...displayPatch } as OperationalSettings;
+    setSettings(next);
     setIsSaving(true);
     try {
       const res = await fetch('/api/admin/settings', {
@@ -222,7 +250,7 @@ export function PrintSettingsClient() {
 
 type SectionProps = {
   settings: OperationalSettings;
-  onSave: (patch: Partial<OperationalSettings>) => void;
+  onSave: (patch: SettingsPatch) => void;
 };
 
 // ---------------- GENERAL: Restaurant profile ----------------
@@ -596,10 +624,10 @@ function TaxSection({ settings, onSave }: SectionProps) {
           checked={taxEnabled}
           onChange={(v) => {
             if (v) {
-              onSave({ taxPercentage: lastNonZero });
+              onSave({ taxPercentage: Number(lastNonZero) });
             } else {
               setLastNonZero(settings.taxPercentage);
-              onSave({ taxPercentage: '0' });
+              onSave({ taxPercentage: 0 });
             }
           }}
         />
