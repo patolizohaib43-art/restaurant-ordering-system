@@ -130,7 +130,7 @@ export function PrintSettingsClient() {
     for (const key of NUMERIC_KEYS) {
       const value = patch[key];
       if (value !== undefined) {
-        (displayPatch as Record<string, unknown>)[key] = value === null ? null : value.toString();
+        displayPatch[key] = value === null ? null : value.toString();
       }
     }
     const next = { ...settings, ...displayPatch } as OperationalSettings;

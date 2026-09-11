@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { getRestaurantTimeZone, getWeekdayInTimeZone, getMinutesSinceMidnightInTimeZone } from '@/lib/timezone';
 import { deleteUploadedFileIfManaged } from '@/lib/uploads';
@@ -174,7 +175,9 @@ export async function updatePrintSettings(input: UpdatePrintSettingsInput) {
       ...(input.minOrderAmount !== undefined && { minOrderAmount: input.minOrderAmount }),
       ...(input.taxPercentage !== undefined && { taxPercentage: input.taxPercentage }),
       ...(input.isAcceptingOrders !== undefined && { isAcceptingOrders: input.isAcceptingOrders }),
-      ...(input.openingHours !== undefined && { openingHours: input.openingHours }),
+      ...(input.openingHours !== undefined && {
+        openingHours: input.openingHours as unknown as Prisma.InputJsonValue,
+      }),
     },
   });
   return updated;
