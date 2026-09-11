@@ -126,7 +126,7 @@ export function PrintSettingsClient() {
     // as strings (matching what GET returns), so numbers from the patch
     // are stringified here — only for the in-memory preview, not for
     // what gets sent to the API below.
-    const displayPatch: Partial<OperationalSettings> = { ...patch };
+    const displayPatch: Record<string, unknown> = { ...patch };
     for (const key of NUMERIC_KEYS) {
       const value = patch[key];
       if (value !== undefined) {
