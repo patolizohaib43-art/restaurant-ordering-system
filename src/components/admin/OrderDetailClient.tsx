@@ -30,6 +30,7 @@ interface OrderDetail {
   couponCode: string | null;
   dealTitle: string | null;
   createdAt: string;
+  timezone: string;
   items: {
     id: string;
     productName: string;
@@ -115,10 +116,11 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
         <div>
           <p className="font-mono text-lg font-bold text-gray-900">{order.orderNumber}</p>
           <p className="text-xs text-gray-400">
-            {new Date(order.createdAt).toLocaleString(undefined, {
+            {new Intl.DateTimeFormat(undefined, {
               dateStyle: 'medium',
               timeStyle: 'short',
-            })}
+              timeZone: order.timezone,
+            }).format(new Date(order.createdAt))}
           </p>
         </div>
         <StatusBadge status={order.status} />
@@ -217,6 +219,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
           currentStatus={order.status}
           orderType={order.orderType}
           history={order.statusHistory}
+          timeZone={order.timezone}
         />
       </div>
 

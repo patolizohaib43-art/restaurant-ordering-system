@@ -1,18 +1,23 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
+import { getRestaurantSettings } from '@/lib/settings';
+import { getRestaurantTimeZone } from '@/lib/timezone';
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const order = await db.order.findUnique({
-      where: { id: params.id },
-      include: {
-        items: { include: { addons: true } },
-        statusHistory: { orderBy: { createdAt: 'asc' }, include: { changedBy: { select: { name: true } } } },
-        coupon: { select: { code: true } },
-        deal: { select: { title: true } },
-      },
-    });
+    const [order, settings] = await Promise.all([
+      db.order.findUnique({
+        where: { id: params.id },
+        include: {
+          items: { include: { addons: true } },
+          statusHistory: { orderBy: { createdAt: 'asc' }, include: { changedBy: { select: { name: true } } } },
+          coupon: { select: { code: true } },
+          deal: { select: { title: true } },
+        },
+      }),
+      getRestaurantSettings(),
+    ]);
 
     if (!order) return apiError('Order not found.', 404);
 
@@ -38,6 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       couponCode: order.coupon?.code ?? null,
       dealTitle: order.deal?.title ?? null,
       createdAt: order.createdAt.toISOString(),
+      timezone: getRestaurantTimeZone(settings.timezone),
       items: order.items.map((item: any) => ({
         id: item.id,
         productName: item.productName,
