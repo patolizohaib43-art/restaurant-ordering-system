@@ -25,8 +25,18 @@
  * clock.
  */
 
-export function getRestaurantTimeZone(): string {
-  return process.env.RESTAURANT_TIMEZONE?.trim() || 'UTC';
+/**
+ * Resolves the restaurant's timezone. Priority order:
+ *  1. `dbOverride` — the admin-configured value from RestaurantSettings
+ *     (Settings → Business → Timezone), when the caller has already
+ *     fetched settings and passes it in.
+ *  2. `RESTAURANT_TIMEZONE` env var — the original Phase 7 mechanism,
+ *     still fully supported for callers that haven't been updated to
+ *     pass a DB value (e.g. report date-range calculations).
+ *  3. `"UTC"` — safe fallback if neither is configured.
+ */
+export function getRestaurantTimeZone(dbOverride?: string | null): string {
+  return dbOverride?.trim() || process.env.RESTAURANT_TIMEZONE?.trim() || 'UTC';
 }
 
 interface WallClockParts {

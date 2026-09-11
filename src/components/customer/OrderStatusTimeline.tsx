@@ -1,5 +1,6 @@
 import { Check, X, Clock } from 'lucide-react';
 import { cn } from '@/utils';
+import { formatDateTimeInTimeZone } from '@/lib/format-timezone';
 
 const HAPPY_PATH = [
   { status: 'PENDING', label: 'Order Placed' },
@@ -22,10 +23,12 @@ export function OrderStatusTimeline({
   currentStatus,
   orderType,
   history,
+  timeZone,
 }: {
   currentStatus: string;
   orderType: 'DELIVERY' | 'PICKUP' | 'DINE_IN';
   history: StatusHistoryEntry[];
+  timeZone: string;
 }) {
   if (TERMINAL_NEGATIVE.includes(currentStatus)) {
     const entry = history.find((h) => h.status === currentStatus);
@@ -91,12 +94,7 @@ export function OrderStatusTimeline({
               </p>
               {historyEntry && (
                 <p className="mt-0.5 text-xs text-gray-400">
-                  {new Date(historyEntry.createdAt).toLocaleString(undefined, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {formatDateTimeInTimeZone(historyEntry.createdAt, timeZone)}
                 </p>
               )}
             </div>

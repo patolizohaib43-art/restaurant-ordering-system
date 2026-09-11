@@ -8,6 +8,7 @@ import { NotificationPrompt } from '@/components/customer/NotificationPrompt';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { useSettings } from '@/components/customer/SettingsProvider';
 import { formatCurrency } from '@/utils';
+import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '@/lib/format-timezone';
 import type { OrderDetailView } from '@/lib/queries';
 
 const POLL_INTERVAL_MS = 15000;
@@ -38,7 +39,7 @@ const STATUS_NOTIFICATION_MESSAGES: Record<string, string> = {
 };
 
 export default function TrackOrderPage({ params }: { params: { token: string } }) {
-  const { currency } = useSettings();
+  const { currency, timezone } = useSettings();
   const [order, setOrder] = useState<OrderDetailView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -185,22 +186,13 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
         <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1">
             <Clock size={12} />
-            Updated{' '}
-            {new Date(lastUpdatedAt).toLocaleString(undefined, {
-              hour: '2-digit',
-              minute: '2-digit',
-              month: 'short',
-              day: 'numeric',
-            })}
+            Updated {formatDateTimeInTimeZone(lastUpdatedAt, timezone)}
           </span>
           {order.estimatedDeliveryTime && !isNegativeStatus && (
             <span>
               Estimated{' '}
               {order.orderType === 'DELIVERY' ? 'delivery' : 'pickup'} by{' '}
-              {new Date(order.estimatedDeliveryTime).toLocaleTimeString(undefined, {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+              {formatTimeInTimeZone(order.estimatedDeliveryTime, timezone)}
             </span>
           )}
         </div>
@@ -211,6 +203,7 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
           currentStatus={order.status}
           orderType={order.orderType}
           history={order.statusHistory}
+          timeZone={timezone}
         />
       </div>
 

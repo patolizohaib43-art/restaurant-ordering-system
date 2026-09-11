@@ -54,7 +54,15 @@ const ZERO = new Prisma.Decimal(0);
  */
 export async function priceOrder(
   requestedItems: RequestedItem[],
-  options: { orderType: 'DELIVERY' | 'PICKUP' | 'DINE_IN'; couponCode?: string; dealId?: string }
+  options: {
+    orderType: 'DELIVERY' | 'PICKUP' | 'DINE_IN';
+    couponCode?: string;
+    dealId?: string;
+    /** Structured delivery-zone selection (Phase 10). When provided and
+     * valid, its `deliveryFee` overrides settings.deliveryFee. Always
+     * re-validated server-side — the client-selected fee is never trusted. */
+    deliveryAreaId?: string;
+  }
 ): Promise<PricingResult> {
   if (requestedItems.length === 0) {
     throw new PricingError('Your cart is empty.');
@@ -64,6 +72,25 @@ export async function priceOrder(
 
   if (!settings.isAcceptingOrders) {
     throw new PricingError('The restaurant is not accepting orders right now.');
+  }
+
+  if (options.orderType === 'DELIVERY' && !settings.deliveryEnabled) {
+    throw new PricingError('Delivery is currently unavailable. Please choose pickup instead.');
+  }
+  if (options.orderType === 'PICKUP' && !settings.pickupEnabled) {
+    throw new PricingError('Pickup is currently unavailable. Please choose delivery instead.');
+  }
+
+  let deliveryArea: { deliveryFee: Prisma.Decimal; minOrderAmount: Prisma.Decimal | null } | null =
+    null;
+  if (options.orderType === 'DELIVERY' && options.deliveryAreaId) {
+    deliveryArea = await db.deliveryArea.findFirst({
+      where: { id: options.deliveryAreaId, isActive: true },
+      select: { deliveryFee: true, minOrderAmount: true },
+    });
+    if (!deliveryArea) {
+      throw new PricingError('The selected delivery area is no longer available.');
+    }
   }
 
   const productIds = [...new Set(requestedItems.map((i) => i.productId))];
@@ -211,8 +238,30 @@ export async function priceOrder(
     discountAmount = subtotal;
   }
 
-  const deliveryFee = options.orderType === 'DELIVERY' ? settings.deliveryFee : ZERO;
   const taxableAmount = subtotal.minus(discountAmount);
+
+  // A selected delivery area's own minimum order (if set) applies on top
+  // of the restaurant-wide minimum already enforced above.
+  if (
+    deliveryArea?.minOrderAmount != null &&
+    taxableAmount.lessThan(deliveryArea.minOrderAmount)
+  ) {
+    throw new PricingError(
+      `Minimum order for this delivery area is ${deliveryArea.minOrderAmount.toString()}.`
+    );
+  }
+
+  const baseDeliveryFee = deliveryArea ? deliveryArea.deliveryFee : settings.deliveryFee;
+
+  // Free delivery once the subtotal (before delivery fee, after discount)
+  // reaches the admin-configured threshold. Computed server-side only —
+  // never trust a "free delivery applied" flag from the client.
+  const qualifiesForFreeDelivery =
+    settings.freeDeliveryAboveAmount != null &&
+    taxableAmount.greaterThanOrEqualTo(settings.freeDeliveryAboveAmount);
+
+  const deliveryFee =
+    options.orderType === 'DELIVERY' && !qualifiesForFreeDelivery ? baseDeliveryFee : ZERO;
   const taxAmount = taxableAmount.times(settings.taxPercentage).dividedBy(100);
   const totalAmount = taxableAmount.plus(deliveryFee).plus(taxAmount);
 

@@ -13,6 +13,7 @@ import {
   toCsv,
   type ReportFilters,
 } from '@/lib/reports';
+import { getRestaurantSettings } from '@/lib/settings';
 
 /**
  * Item 18 — CSV export. Every export is recomputed from the live database
@@ -24,7 +25,13 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') ?? 'orders';
-    const range = resolveDateRange(searchParams.get('range'), searchParams.get('from'), searchParams.get('to'));
+    const { timezone } = await getRestaurantSettings();
+    const range = resolveDateRange(
+      searchParams.get('range'),
+      searchParams.get('from'),
+      searchParams.get('to'),
+      timezone
+    );
     const filters: ReportFilters = {
       status: searchParams.get('status'),
       paymentMethod: searchParams.get('paymentMethod'),
@@ -112,7 +119,7 @@ export async function GET(request: NextRequest) {
         break;
       }
       case 'daily-sales': {
-        const days = await getDailySales(range);
+        const days = await getDailySales(range, timezone);
         csv = toCsv(
           ['Date', 'Total Sales', 'Orders'],
           days.map((d) => [d.date, d.total.toFixed(2), d.orders])

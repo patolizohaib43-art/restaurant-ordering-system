@@ -12,6 +12,7 @@ interface ReceiptSettings {
   phone: string | null;
   currency: string;
   receiptWidth: 'MM_58' | 'MM_80';
+  timezone: string;
 }
 
 interface ReceiptData {

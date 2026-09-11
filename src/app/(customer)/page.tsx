@@ -148,6 +148,55 @@ export default async function CustomerHomePage() {
           />
         </div>
       )}
+
+      {/* Restaurant information */}
+      {(settings.address || settings.phone || settings.whatsapp) && (
+        <section className="mt-6 px-4">
+          <SectionHeader title="Visit or contact us" />
+          <div className="space-y-2.5 rounded-2xl border border-gray-100 bg-white p-4">
+            {settings.address && (
+              <div>
+                <p className="text-xs font-medium text-gray-400">Address</p>
+                <p className="text-sm text-gray-800">
+                  {settings.address}
+                  {settings.city ? `, ${settings.city}` : ''}
+                </p>
+                {settings.googleMapsUrl && (
+                  <a
+                    href={settings.googleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-0.5 inline-block text-xs font-semibold text-brand-600"
+                  >
+                    Get directions →
+                  </a>
+                )}
+              </div>
+            )}
+            {settings.phone && (
+              <div>
+                <p className="text-xs font-medium text-gray-400">Phone</p>
+                <a href={`tel:${settings.phone}`} className="text-sm text-gray-800">
+                  {settings.phone}
+                </a>
+              </div>
+            )}
+            {settings.whatsapp && (
+              <div>
+                <p className="text-xs font-medium text-gray-400">WhatsApp</p>
+                <a
+                  href={`https://wa.me/${settings.whatsapp.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-800"
+                >
+                  {settings.whatsapp}
+                </a>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

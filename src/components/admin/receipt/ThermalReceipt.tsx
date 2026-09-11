@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/utils';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/format-timezone';
 import type { ReceiptOrderView } from '@/lib/receipt';
 
 interface ReceiptSettings {
@@ -7,6 +8,7 @@ interface ReceiptSettings {
   phone: string | null;
   currency: string;
   receiptWidth: 'MM_58' | 'MM_80';
+  timezone: string;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -21,11 +23,8 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   ONLINE_WALLET: 'Online Wallet',
 };
 
-function formatDateLine(iso: string) {
-  const d = new Date(iso);
-  const date = d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  return { date, time };
+function formatDateLine(iso: string, timeZone: string) {
+  return { date: formatDateInTimeZone(iso, timeZone), time: formatTimeInTimeZone(iso, timeZone) };
 }
 
 /**
@@ -40,7 +39,7 @@ export function ThermalReceipt({
   order: ReceiptOrderView;
   settings: ReceiptSettings;
 }) {
-  const { date, time } = formatDateLine(order.createdAt);
+  const { date, time } = formatDateLine(order.createdAt, settings.timezone);
   const widthClass = settings.receiptWidth === 'MM_58' ? 'receipt-58' : 'receipt-80';
   const currency = settings.currency || 'PKR';
 

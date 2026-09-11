@@ -250,6 +250,12 @@ model Order {
   orderType            OrderType @default(DELIVERY)
   deliveryAddress      String?
   area                 String?
+  // Structured delivery-zone selection (Phase 10). Nullable/SetNull: if
+  // the area is later edited or removed, existing orders keep their
+  // already-charged deliveryFee and the free-text `area` label above —
+  // pricing history is never retroactively altered.
+  deliveryAreaId       String?
+  deliveryArea         DeliveryArea? @relation(fields: [deliveryAreaId], references: [id], onDelete: SetNull)
   deliveryInstructions String?
 
   subtotal       Decimal @db.Decimal(10, 2)
@@ -385,6 +391,25 @@ model Review {
 // SETTINGS (single-row configuration table)
 // ------------------------------------------------------------------
 
+/// Phase 10: admin-managed delivery zones with per-area pricing. Falls
+/// back to RestaurantSettings.deliveryFee when no areas are configured
+/// (see src/lib/pricing.ts) — existing single-flat-fee setups keep
+/// working unchanged.
+model DeliveryArea {
+  id             String  @id @default(cuid())
+  name           String
+  deliveryFee    Decimal @db.Decimal(10, 2)
+  minOrderAmount Decimal? @db.Decimal(10, 2)
+  isActive       Boolean @default(true)
+  sortOrder      Int     @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([isActive])
+}
+
 model RestaurantSettings {
   id String @id @default(cuid())
 
@@ -394,14 +419,30 @@ model RestaurantSettings {
   tagline           String? @default("")
   logoUrl           String?
   address           String?
+  city              String?
+  area              String?
+  googleMapsUrl     String?
   phone             String?
+  whatsapp          String?
   email             String?
   openingHours      Json? // e.g. { "mon": "09:00-22:00", ... }
+  deliveryEnabled   Boolean @default(true)
+  pickupEnabled     Boolean @default(true)
   deliveryFee       Decimal @default(0) @db.Decimal(10, 2)
+  // Orders at or above this subtotal get free delivery. 0/null = no
+  // free-delivery threshold configured — the flat deliveryFee always
+  // applies. Kept separate from deliveryFee so "free above X" can be
+  // toggled without losing the configured flat fee underneath it.
+  freeDeliveryAboveAmount Decimal? @db.Decimal(10, 2)
   minOrderAmount    Decimal @default(0) @db.Decimal(10, 2)
   taxPercentage     Decimal @default(0) @db.Decimal(5, 2)
   isAcceptingOrders Boolean @default(true)
   currency          String  @default("USD")
+  // IANA timezone name (e.g. "Asia/Karachi"). When set, this takes
+  // priority over the RESTAURANT_TIMEZONE env var — see
+  // src/lib/timezone.ts. Admin-editable from Settings so it no longer
+  // requires a code/env change and redeploy to correct.
+  timezone          String? @default("Asia/Karachi")
 
   // ---------------- Phase 4: printing & notifications ----------------
   // Which thermal paper width the admin's printer uses. Drives the

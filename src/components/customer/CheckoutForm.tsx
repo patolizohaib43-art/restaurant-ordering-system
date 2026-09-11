@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bike, Store, Loader2, Banknote } from 'lucide-react';
+import { Bike, Store, Loader2, Banknote, Tag } from 'lucide-react';
 import { useCart } from '@/components/customer/CartProvider';
 import { useSettings } from '@/components/customer/SettingsProvider';
 import { PriceSummary } from '@/components/customer/PriceSummary';
@@ -17,7 +17,12 @@ export function CheckoutForm() {
   const dealFromCart = searchParams.get('deal') ?? '';
 
   const { items, subtotal, clearCart, isHydrated } = useCart();
-  const { currency, deliveryFee: deliveryFeeStr, taxPercentage: taxPercentageStr } = useSettings();
+  const {
+    currency,
+    deliveryFee: deliveryFeeStr,
+    freeDeliveryAboveAmount,
+    taxPercentage: taxPercentageStr,
+  } = useSettings();
 
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [customerName, setCustomerName] = useState('');
@@ -28,18 +33,90 @@ export function CheckoutForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const deliveryFee = orderType === 'DELIVERY' ? parseFloat(deliveryFeeStr) : 0;
+  // Admin-managed delivery zones (Phase 10). When configured, checkout
+  // shows a dropdown of areas with their own delivery fee instead of a
+  // free-text "Area" field, and that per-area fee is used for display —
+  // always re-validated server-side against the selected deliveryAreaId,
+  // never trusted from the client (see src/lib/pricing.ts).
+  const [deliveryAreas, setDeliveryAreas] = useState<
+    { id: string; name: string; deliveryFee: string; minOrderAmount: string | null }[] | null
+  >(null);
+  const [selectedAreaId, setSelectedAreaId] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/delivery-areas', { cache: 'no-store' });
+        const json = await res.json();
+        if (json.success) setDeliveryAreas(json.data);
+      } catch {
+        setDeliveryAreas([]); // fall back to the global flat delivery fee
+      }
+    })();
+  }, []);
+
+  // The coupon/deal were already applied on the Cart page and only the
+  // code is carried over via the URL — so we re-validate it here against
+  // the current subtotal to get a real discount figure for the Order
+  // Summary. This is DISPLAY ONLY: the actual discount that ends up on
+  // the order is always recalculated server-side in POST /api/orders
+  // (see src/lib/pricing.ts), which never trusts this value.
+  const [previewDiscount, setPreviewDiscount] = useState(0);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!couponFromCart || subtotal <= 0) {
+      setPreviewDiscount(0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/coupons/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: couponFromCart, subtotal }),
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !json.success) {
+          setCouponError(json.error ?? 'This coupon is no longer valid.');
+          setPreviewDiscount(0);
+          return;
+        }
+        setCouponError(null);
+        setPreviewDiscount(parseFloat(json.data.discountAmount));
+      } catch {
+        if (!cancelled) setCouponError('Could not verify coupon.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couponFromCart, subtotal]);
+
+  const freeDeliveryThreshold = freeDeliveryAboveAmount ? parseFloat(freeDeliveryAboveAmount) : null;
+  const discountAmount = previewDiscount;
+  const subtotalAfterDiscount = Math.max(subtotal - discountAmount, 0);
+  const qualifiesForFreeDelivery =
+    freeDeliveryThreshold != null && subtotalAfterDiscount >= freeDeliveryThreshold;
+  const selectedArea = deliveryAreas?.find((a) => a.id === selectedAreaId) ?? null;
+  const baseDeliveryFee = selectedArea ? parseFloat(selectedArea.deliveryFee) : parseFloat(deliveryFeeStr);
+  const deliveryFee = orderType === 'DELIVERY' && !qualifiesForFreeDelivery ? baseDeliveryFee : 0;
   const taxPercentage = parseFloat(taxPercentageStr);
-  const discountAmount = 0; // coupon re-validated & applied server-side; shown post-order on confirmation
-  const taxAmount = (subtotal - discountAmount) * (taxPercentage / 100);
-  const total = subtotal - discountAmount + deliveryFee + taxAmount;
+  const taxAmount = subtotalAfterDiscount * (taxPercentage / 100);
+  const total = subtotalAfterDiscount + deliveryFee + taxAmount;
 
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
     if (!customerName.trim() || !customerPhone.trim()) return false;
     if (orderType === 'DELIVERY' && !deliveryAddress.trim()) return false;
+    if (orderType === 'DELIVERY' && deliveryAreas && deliveryAreas.length > 0 && !selectedAreaId) {
+      return false;
+    }
     return true;
-  }, [items.length, customerName, customerPhone, orderType, deliveryAddress]);
+  }, [items.length, customerName, customerPhone, orderType, deliveryAddress, deliveryAreas, selectedAreaId]);
 
   if (isHydrated && items.length === 0) {
     router.replace('/cart');
@@ -61,7 +138,8 @@ export function CheckoutForm() {
           customerPhone: customerPhone.trim(),
           orderType,
           deliveryAddress: orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined,
-          area: area.trim() || undefined,
+          area: selectedArea ? selectedArea.name : area.trim() || undefined,
+          deliveryAreaId: orderType === 'DELIVERY' ? selectedAreaId || undefined : undefined,
           deliveryInstructions: instructions.trim() || undefined,
           couponCode: couponFromCart || undefined,
           dealId: dealFromCart || undefined,
@@ -154,14 +232,34 @@ export function CheckoutForm() {
                 required
               />
             </Field>
-            <Field label="Area">
-              <input
-                value={area}
-                onChange={(e) => setArea(e.target.value)}
-                placeholder="e.g. Gulshan-e-Iqbal"
-                className="input"
-              />
-            </Field>
+            {deliveryAreas && deliveryAreas.length > 0 ? (
+              <Field label="Delivery area" required>
+                <select
+                  value={selectedAreaId}
+                  onChange={(e) => setSelectedAreaId(e.target.value)}
+                  className="input"
+                  required
+                >
+                  <option value="" disabled>
+                    Select your area
+                  </option>
+                  {deliveryAreas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} — {formatCurrency(a.deliveryFee, currency)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <Field label="Area">
+                <input
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  placeholder="e.g. Gulshan-e-Iqbal"
+                  className="input"
+                />
+              </Field>
+            )}
           </>
         )}
 
@@ -192,19 +290,36 @@ export function CheckoutForm() {
         <h2 className="mb-3 text-sm font-semibold text-gray-900">Order summary</h2>
         <PriceSummary
           subtotal={subtotal}
+          discountAmount={discountAmount}
+          discountLabel={couponFromCart ? `Coupon (${couponFromCart})` : 'Discount'}
           deliveryFee={deliveryFee}
           taxAmount={taxAmount}
           total={total}
           currency={currency}
         />
-        {couponFromCart && (
-          <p className="mt-2 text-xs text-gray-400">
-            Coupon &ldquo;{couponFromCart}&rdquo; will be applied at checkout.
+        {couponFromCart && !couponError && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-green-700">
+            <Tag size={13} /> Coupon &ldquo;{couponFromCart}&rdquo; applied
           </p>
+        )}
+        {couponFromCart && couponError && (
+          <p className="mt-2 text-xs text-red-600">{couponError}</p>
         )}
         {dealFromCart && (
           <p className="mt-1 text-xs text-gray-400">Your selected deal will be applied at checkout.</p>
         )}
+        {orderType === 'DELIVERY' && qualifiesForFreeDelivery && (
+          <p className="mt-2 text-xs font-medium text-green-700">🎉 You qualify for free delivery!</p>
+        )}
+        {orderType === 'DELIVERY' &&
+          !qualifiesForFreeDelivery &&
+          freeDeliveryThreshold != null &&
+          freeDeliveryThreshold > subtotalAfterDiscount && (
+            <p className="mt-2 text-xs text-gray-400">
+              Add {formatCurrency(freeDeliveryThreshold - subtotalAfterDiscount, currency)} more for free
+              delivery.
+            </p>
+          )}
       </div>
 
       {error && (

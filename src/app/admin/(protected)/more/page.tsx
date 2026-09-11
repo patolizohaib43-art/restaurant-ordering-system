@@ -1,16 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { Ticket, Star, Bell, FolderCog, LogOut, ChevronRight, Printer, BarChart3 } from 'lucide-react';
+import {
+  Ticket,
+  Star,
+  Bell,
+  FolderCog,
+  LogOut,
+  ChevronRight,
+  Settings,
+  BarChart3,
+  MapPinned,
+} from 'lucide-react';
 import { useAdminSession } from '@/components/admin/AdminSessionProvider';
 
 const LINKS = [
   { href: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3 },
   { href: '/admin/categories', label: 'Categories', icon: FolderCog },
+  { href: '/admin/delivery-areas', label: 'Delivery Areas', icon: MapPinned },
   { href: '/admin/coupons', label: 'Coupons', icon: Ticket },
   { href: '/admin/reviews', label: 'Reviews', icon: Star },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-  { href: '/admin/settings', label: 'Print & Notification Settings', icon: Printer },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function MorePage() {

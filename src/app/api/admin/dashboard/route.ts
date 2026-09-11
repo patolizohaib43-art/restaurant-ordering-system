@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getRestaurantTimeZone, startOfDayInTimeZone } from '@/lib/timezone';
+import { getRestaurantSettings } from '@/lib/settings';
 
 export async function GET() {
   try {
@@ -8,7 +9,9 @@ export async function GET() {
     // "Today" is computed in the restaurant's configured timezone (see
     // src/lib/timezone.ts) so this figure always matches the Reports
     // page's "Today" figure, regardless of server/deployment timezone.
-    const todayStart = startOfDayInTimeZone(now, getRestaurantTimeZone());
+    // Prefers the admin-editable Settings value over the env var.
+    const { timezone } = await getRestaurantSettings();
+    const todayStart = startOfDayInTimeZone(now, getRestaurantTimeZone(timezone));
 
     const [
       ordersToday,

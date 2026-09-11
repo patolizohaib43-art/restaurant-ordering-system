@@ -9,6 +9,7 @@ const TITLES: { prefix: string; label: string }[] = [
   { prefix: '/admin/orders', label: 'Orders' },
   { prefix: '/admin/products', label: 'Products' },
   { prefix: '/admin/categories', label: 'Categories' },
+  { prefix: '/admin/delivery-areas', label: 'Delivery Areas' },
   { prefix: '/admin/deals', label: 'Deals' },
   { prefix: '/admin/coupons', label: 'Coupons' },
   { prefix: '/admin/notifications', label: 'Notifications' },

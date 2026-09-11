@@ -7,11 +7,19 @@ export interface PublicSettings {
   tagline: string;
   logoUrl: string | null;
   address: string | null;
+  city: string | null;
+  area: string | null;
+  googleMapsUrl: string | null;
   phone: string | null;
+  whatsapp: string | null;
+  deliveryEnabled: boolean;
+  pickupEnabled: boolean;
   deliveryFee: string;
+  freeDeliveryAboveAmount: string | null;
   minOrderAmount: string;
   taxPercentage: string;
   currency: string;
+  timezone: string;
   isAcceptingOrders: boolean;
   isOpenNow: boolean;
 }

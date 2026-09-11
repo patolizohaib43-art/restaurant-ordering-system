@@ -24,10 +24,14 @@ const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
  * server process's local time, so "open now" is correct no matter which
  * timezone the app happens to be deployed/running in.
  */
-export function isWithinOpeningHours(openingHours: unknown, now: Date = new Date()): boolean {
+export function isWithinOpeningHours(
+  openingHours: unknown,
+  now: Date = new Date(),
+  timeZoneOverride?: string | null
+): boolean {
   if (!openingHours || typeof openingHours !== 'object') return true;
 
-  const timeZone = getRestaurantTimeZone();
+  const timeZone = getRestaurantTimeZone(timeZoneOverride);
   const hours = openingHours as OpeningHours;
   const dayKey = DAY_KEYS[getWeekdayInTimeZone(now, timeZone)];
   const today = hours[dayKey];
@@ -82,11 +86,25 @@ export async function getAdminOperationalSettings() {
     tagline: settings.tagline || '',
     logoUrl: settings.logoUrl,
     address: settings.address,
+    city: settings.city,
+    area: settings.area,
+    googleMapsUrl: settings.googleMapsUrl,
     phone: settings.phone,
+    whatsapp: settings.whatsapp,
+    email: settings.email,
     currency: settings.currency,
+    timezone: settings.timezone,
     receiptWidth: settings.receiptWidth,
     autoPrintNewOrders: settings.autoPrintNewOrders,
     notificationSoundEnabled: settings.notificationSoundEnabled,
+    deliveryEnabled: settings.deliveryEnabled,
+    pickupEnabled: settings.pickupEnabled,
+    deliveryFee: settings.deliveryFee.toString(),
+    freeDeliveryAboveAmount: settings.freeDeliveryAboveAmount?.toString() ?? null,
+    minOrderAmount: settings.minOrderAmount.toString(),
+    taxPercentage: settings.taxPercentage.toString(),
+    isAcceptingOrders: settings.isAcceptingOrders,
+    openingHours: settings.openingHours as OpeningHours | null,
   };
 }
 
@@ -99,6 +117,24 @@ export interface UpdatePrintSettingsInput {
   restaurantName?: string;
   tagline?: string;
   logoUrl?: string;
+  // ---------------- Phase 10: business / delivery / address ----------------
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  area?: string;
+  googleMapsUrl?: string;
+  timezone?: string;
+  currency?: string;
+  deliveryEnabled?: boolean;
+  pickupEnabled?: boolean;
+  deliveryFee?: number;
+  freeDeliveryAboveAmount?: number | null;
+  minOrderAmount?: number;
+  taxPercentage?: number;
+  isAcceptingOrders?: boolean;
+  openingHours?: OpeningHours;
 }
 
 /** Updates the Phase 4 print/notification fields plus basic brand profile fields. */
@@ -120,6 +156,25 @@ export async function updatePrintSettings(input: UpdatePrintSettingsInput) {
       ...(input.notificationSoundEnabled !== undefined && {
         notificationSoundEnabled: input.notificationSoundEnabled,
       }),
+      ...(input.phone !== undefined && { phone: input.phone }),
+      ...(input.whatsapp !== undefined && { whatsapp: input.whatsapp }),
+      ...(input.email !== undefined && { email: input.email }),
+      ...(input.address !== undefined && { address: input.address }),
+      ...(input.city !== undefined && { city: input.city }),
+      ...(input.area !== undefined && { area: input.area }),
+      ...(input.googleMapsUrl !== undefined && { googleMapsUrl: input.googleMapsUrl }),
+      ...(input.timezone !== undefined && { timezone: input.timezone }),
+      ...(input.currency !== undefined && { currency: input.currency }),
+      ...(input.deliveryEnabled !== undefined && { deliveryEnabled: input.deliveryEnabled }),
+      ...(input.pickupEnabled !== undefined && { pickupEnabled: input.pickupEnabled }),
+      ...(input.deliveryFee !== undefined && { deliveryFee: input.deliveryFee }),
+      ...(input.freeDeliveryAboveAmount !== undefined && {
+        freeDeliveryAboveAmount: input.freeDeliveryAboveAmount,
+      }),
+      ...(input.minOrderAmount !== undefined && { minOrderAmount: input.minOrderAmount }),
+      ...(input.taxPercentage !== undefined && { taxPercentage: input.taxPercentage }),
+      ...(input.isAcceptingOrders !== undefined && { isAcceptingOrders: input.isAcceptingOrders }),
+      ...(input.openingHours !== undefined && { openingHours: input.openingHours }),
     },
   });
   return updated;
@@ -127,19 +182,29 @@ export async function updatePrintSettings(input: UpdatePrintSettingsInput) {
 
 export async function getPublicSettings() {
   const settings = await getRestaurantSettings();
-  const isOpenNow = settings.isAcceptingOrders && isWithinOpeningHours(settings.openingHours);
+  const isOpenNow =
+    settings.isAcceptingOrders &&
+    isWithinOpeningHours(settings.openingHours, new Date(), settings.timezone);
 
   return {
     restaurantName: settings.restaurantName,
     tagline: settings.tagline || '',
     logoUrl: settings.logoUrl,
     address: settings.address,
+    city: settings.city,
+    area: settings.area,
+    googleMapsUrl: settings.googleMapsUrl,
     phone: settings.phone,
+    whatsapp: settings.whatsapp,
     openingHours: settings.openingHours,
+    deliveryEnabled: settings.deliveryEnabled,
+    pickupEnabled: settings.pickupEnabled,
     deliveryFee: settings.deliveryFee.toString(),
+    freeDeliveryAboveAmount: settings.freeDeliveryAboveAmount?.toString() ?? null,
     minOrderAmount: settings.minOrderAmount.toString(),
     taxPercentage: settings.taxPercentage.toString(),
     currency: settings.currency,
+    timezone: getRestaurantTimeZone(settings.timezone),
     isAcceptingOrders: settings.isAcceptingOrders,
     isOpenNow,
   };

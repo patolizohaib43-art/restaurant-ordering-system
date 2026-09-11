@@ -3,8 +3,13 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-function img(seed: string) {
-  return `https://picsum.photos/seed/${seed}/600/450`;
+// Seed data intentionally ships WITHOUT stock/random photos. Using
+// Picsum/wallpaper images and labeling them as food would be misleading —
+// the admin should upload real photos of the actual dishes via the
+// Products/Categories/Deals image upload UI. Cards render a clean
+// "no image yet" placeholder until then (see ProductCard, CategoryCard).
+function img(_seed: string) {
+  return null;
 }
 
 async function main() {

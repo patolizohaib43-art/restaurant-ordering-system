@@ -63,6 +63,7 @@ export const createOrderSchema = z.object({
   orderType: z.enum(['DELIVERY', 'PICKUP', 'DINE_IN']),
   deliveryAddress: z.string().max(300).optional(),
   area: z.string().max(100).optional(),
+  deliveryAreaId: z.string().min(1).optional(),
   deliveryInstructions: z.string().max(300).optional(),
   couponCode: z.string().max(30).optional(),
   dealId: z.string().min(1).optional(),
@@ -98,6 +99,41 @@ export const printSettingsSchema = z.object({
   restaurantName: z.string().trim().min(1).max(120).optional(),
   tagline: z.string().trim().max(160).optional(),
   logoUrl: z.string().trim().max(500).optional(),
+  // ---------------- Phase 10 ----------------
+  phone: z.string().trim().max(30).optional(),
+  whatsapp: z.string().trim().max(30).optional(),
+  email: z.string().trim().max(160).optional(),
+  address: z.string().trim().max(300).optional(),
+  city: z.string().trim().max(100).optional(),
+  area: z.string().trim().max(100).optional(),
+  googleMapsUrl: z.string().trim().max(500).optional(),
+  timezone: z.string().trim().max(60).optional(),
+  currency: z.string().trim().max(10).optional(),
+  deliveryEnabled: z.boolean().optional(),
+  pickupEnabled: z.boolean().optional(),
+  deliveryFee: z.number().min(0).optional(),
+  freeDeliveryAboveAmount: z.number().min(0).nullable().optional(),
+  minOrderAmount: z.number().min(0).optional(),
+  taxPercentage: z.number().min(0).max(100).optional(),
+  isAcceptingOrders: z.boolean().optional(),
+  openingHours: z
+    .record(
+      z.string(),
+      z.object({
+        open: z.string(),
+        close: z.string(),
+        closed: z.boolean().optional(),
+      })
+    )
+    .optional(),
+});
+
+export const deliveryAreaSchema = z.object({
+  name: z.string().trim().min(1, 'Area name is required').max(100),
+  deliveryFee: z.number().min(0),
+  minOrderAmount: z.number().min(0).nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
 });
 
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;

@@ -10,6 +10,7 @@ import {
   getDailySales,
   type ReportFilters,
 } from '@/lib/reports';
+import { getRestaurantSettings } from '@/lib/settings';
 
 /**
  * Items 10, 11, 12, 13, 16 & 17 — the main Sales Report. All sections share
@@ -20,10 +21,12 @@ import {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const { timezone } = await getRestaurantSettings();
     const range = resolveDateRange(
       searchParams.get('range'),
       searchParams.get('from'),
-      searchParams.get('to')
+      searchParams.get('to'),
+      timezone
     );
 
     const filters: ReportFilters = {
@@ -42,7 +45,7 @@ export async function GET(request: NextRequest) {
       getSalesTotals(range, filters),
       getOrderStatusDistribution(range, filters),
       getProductSales(range, filters),
-      spanDays <= 92 ? getDailySales(range) : Promise.resolve([]),
+      spanDays <= 92 ? getDailySales(range, timezone) : Promise.resolve([]),
     ]);
 
     return apiSuccess({

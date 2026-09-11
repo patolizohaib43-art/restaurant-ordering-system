@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       orderType: input.orderType,
       couponCode: input.couponCode,
       dealId: input.dealId,
+      deliveryAreaId: input.deliveryAreaId,
     });
 
     const trackingToken = generateSecureToken(24);
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
           orderType: input.orderType,
           deliveryAddress: input.deliveryAddress?.trim() || null,
           area: input.area?.trim() || null,
+          deliveryAreaId: input.orderType === 'DELIVERY' ? input.deliveryAreaId || null : null,
           deliveryInstructions: input.deliveryInstructions?.trim() || null,
           subtotal: pricing.subtotal,
           discountAmount: pricing.discountAmount,

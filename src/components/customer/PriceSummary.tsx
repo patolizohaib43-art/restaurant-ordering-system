@@ -3,6 +3,7 @@ import { formatCurrency } from '@/utils';
 interface PriceSummaryProps {
   subtotal: number;
   discountAmount?: number;
+  discountLabel?: string;
   deliveryFee?: number;
   taxAmount?: number;
   total: number;
@@ -12,6 +13,7 @@ interface PriceSummaryProps {
 export function PriceSummary({
   subtotal,
   discountAmount = 0,
+  discountLabel = 'Discount',
   deliveryFee = 0,
   taxAmount = 0,
   total,
@@ -22,7 +24,7 @@ export function PriceSummary({
       <Row label="Subtotal" value={formatCurrency(subtotal, currency)} />
       {discountAmount > 0 && (
         <Row
-          label="Discount"
+          label={discountLabel}
           value={`-${formatCurrency(discountAmount, currency)}`}
           valueClass="text-green-600"
         />

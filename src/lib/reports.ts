@@ -23,19 +23,20 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // All "today"/"this month" boundaries are computed in the restaurant's
 // configured timezone (RESTAURANT_TIMEZONE), not the server process's
 // local timezone — see src/lib/timezone.ts for why this matters.
-function startOfDay(d: Date): Date {
-  return startOfDayInTimeZone(d, getRestaurantTimeZone());
+function startOfDay(d: Date, timeZone?: string | null): Date {
+  return startOfDayInTimeZone(d, getRestaurantTimeZone(timeZone));
 }
 
 /** Resolves a report date-range key (+ optional custom bounds) into concrete start/end Dates. */
 export function resolveDateRange(
   range: string | null | undefined,
   from?: string | null,
-  to?: string | null
+  to?: string | null,
+  timeZoneOverride?: string | null
 ): ResolvedRange {
   const now = new Date();
-  const timeZone = getRestaurantTimeZone();
-  const todayStart = startOfDay(now);
+  const timeZone = getRestaurantTimeZone(timeZoneOverride);
+  const todayStart = startOfDay(now, timeZoneOverride);
   const todayEnd = new Date(todayStart.getTime() + DAY_MS - 1);
 
   switch (range) {
@@ -51,8 +52,10 @@ export function resolveDateRange(
     case 'thisMonth':
       return { start: startOfMonthInTimeZone(now, timeZone), end: todayEnd, label: 'This month' };
     case 'custom': {
-      const start = from ? startOfDay(new Date(from)) : todayStart;
-      const end = to ? new Date(startOfDay(new Date(to)).getTime() + DAY_MS - 1) : todayEnd;
+      const start = from ? startOfDay(new Date(from), timeZoneOverride) : todayStart;
+      const end = to
+        ? new Date(startOfDay(new Date(to), timeZoneOverride).getTime() + DAY_MS - 1)
+        : todayEnd;
       return { start, end, label: 'Custom range' };
     }
     case 'today':
@@ -231,8 +234,8 @@ export function categoryPerformanceFrom(productSales: Awaited<ReturnType<typeof 
  * sees as "today"/"yesterday" in the reports UI, regardless of what
  * timezone Postgres or the app server happen to be running in.
  */
-export async function getDailySales(range: ResolvedRange) {
-  const timeZone = getRestaurantTimeZone();
+export async function getDailySales(range: ResolvedRange, timeZoneOverride?: string | null) {
+  const timeZone = getRestaurantTimeZone(timeZoneOverride);
 
   const rows = await db.$queryRaw<{ day: Date; total: number; orders: number }[]>`
     SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE ${timeZone}) AS day,

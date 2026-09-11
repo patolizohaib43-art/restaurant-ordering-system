@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { resolveDateRange, getSalesTotals, SALES_EXCLUDED_STATUSES } from '@/lib/reports';
+import { getRestaurantSettings } from '@/lib/settings';
 
 /**
  * Item 9 — Admin Reports Dashboard summary: today / yesterday / this week /
@@ -10,13 +11,14 @@ import { resolveDateRange, getSalesTotals, SALES_EXCLUDED_STATUSES } from '@/lib
 export async function GET() {
   try {
     const noFilters = {};
+    const { timezone } = await getRestaurantSettings();
 
     const [today, yesterday, thisWeek, thisMonth, totalOrders, completedOrders, cancelledOrders, rejectedOrders] =
       await Promise.all([
-        getSalesTotals(resolveDateRange('today'), noFilters),
-        getSalesTotals(resolveDateRange('yesterday'), noFilters),
-        getSalesTotals(resolveDateRange('last7'), noFilters),
-        getSalesTotals(resolveDateRange('thisMonth'), noFilters),
+        getSalesTotals(resolveDateRange('today', null, null, timezone), noFilters),
+        getSalesTotals(resolveDateRange('yesterday', null, null, timezone), noFilters),
+        getSalesTotals(resolveDateRange('last7', null, null, timezone), noFilters),
+        getSalesTotals(resolveDateRange('thisMonth', null, null, timezone), noFilters),
         db.order.count(),
         db.order.count({ where: { status: { in: ['DELIVERED', 'COMPLETED'] } } }),
         db.order.count({ where: { status: 'CANCELLED' } }),

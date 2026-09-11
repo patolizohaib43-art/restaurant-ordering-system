@@ -1,15 +1,18 @@
 import { NextRequest } from 'next/server';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { resolveDateRange, getCouponAnalytics, getDealPerformance } from '@/lib/reports';
+import { getRestaurantSettings } from '@/lib/settings';
 
 /** Items 14 & 15 — Deal Performance and Coupon Analytics. */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const { timezone } = await getRestaurantSettings();
     const range = resolveDateRange(
       searchParams.get('range'),
       searchParams.get('from'),
-      searchParams.get('to')
+      searchParams.get('to'),
+      timezone
     );
 
     const [coupons, deals] = await Promise.all([getCouponAnalytics(range), getDealPerformance(range)]);
