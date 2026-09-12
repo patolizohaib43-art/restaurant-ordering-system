@@ -91,3 +91,77 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+/**
+ * Web Push (Phase 11) — real background notifications for new orders.
+ *
+ * This fires whenever a push message arrives from the server, INCLUDING
+ * when no admin tab is open at all — this is the actual mechanism that
+ * makes a browser-closed Android notification possible. A plain
+ * `new Notification(...)` call from page JavaScript cannot do this; it
+ * requires nothing be running except the browser's own push service.
+ */
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: 'Zaiqa-e-Sindh', body: event.data.text() };
+  }
+
+  const title = payload.title || 'Zaiqa-e-Sindh';
+  const options = {
+    body: payload.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: payload.tag || 'new-order',
+    // A fresh order notification should always be seen even if an
+    // identical-tag one is still showing, but shouldn't re-vibrate on
+    // every single poll — renotify + tag together achieve that.
+    renotify: true,
+    data: payload.data || {},
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/** Tapping the notification focuses an existing admin tab if one is open
+ * (navigating it to the order), or opens a new one if not. */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/admin/orders';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsArr) => {
+      for (const client of clientsArr) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
+/** If the push service invalidates a subscription (device unsubscribed,
+ * browser data cleared, etc.), it fires this instead of a push — clean
+ * up server-side too so we stop trying to send to a dead endpoint. */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        await fetch('/api/admin/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: event.oldSubscription ? event.oldSubscription.endpoint : null }),
+        });
+      } catch {
+        // Best-effort — nothing more we can do from here.
+      }
+    })()
+  );
+});

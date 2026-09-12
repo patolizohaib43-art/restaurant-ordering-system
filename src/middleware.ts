@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminSession, ADMIN_SESSION_COOKIE_NAME } from '@/lib/auth';
 
 const PUBLIC_PAGE_PATHS = ['/admin/login'];
-const PUBLIC_API_PATHS = ['/api/admin/auth/login'];
+const PUBLIC_API_PATHS = [
+  '/api/admin/auth/login',
+  // Fired by the service worker's `pushsubscriptionchange` event, which
+  // has no cookie/session context of its own — see push/unsubscribe/route.ts
+  // for why this is still safe to leave unauthenticated.
+  '/api/admin/push/unsubscribe',
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

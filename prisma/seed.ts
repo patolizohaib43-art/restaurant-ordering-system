@@ -13,6 +13,35 @@ function img(_seed: string) {
 }
 
 async function main() {
+  // ---------------- One-time cleanup: remove leftover Picsum URLs ----------------
+  // Earlier seed runs (before this fix) wrote real https://picsum.photos/...
+  // URLs into the database. Re-running `prisma db seed` alone does NOT fix
+  // already-existing rows — Prisma's `upsert` here only sets `imageUrl` on
+  // first `create`, never on `update` — so those wallpaper images would
+  // otherwise persist forever. This targets ONLY picsum.photos URLs, so any
+  // real photo an admin has since uploaded through the Products/Categories
+  // /Deals image upload UI is left completely untouched.
+  const [clearedCategories, clearedProducts, clearedDeals] = await Promise.all([
+    prisma.category.updateMany({
+      where: { imageUrl: { contains: 'picsum.photos' } },
+      data: { imageUrl: null },
+    }),
+    prisma.product.updateMany({
+      where: { imageUrl: { contains: 'picsum.photos' } },
+      data: { imageUrl: null },
+    }),
+    prisma.deal.updateMany({
+      where: { imageUrl: { contains: 'picsum.photos' } },
+      data: { imageUrl: null },
+    }),
+  ]);
+  const totalCleared = clearedCategories.count + clearedProducts.count + clearedDeals.count;
+  if (totalCleared > 0) {
+    console.log(
+      `Cleared ${totalCleared} leftover Picsum placeholder image(s) (${clearedCategories.count} categories, ${clearedProducts.count} products, ${clearedDeals.count} deals).`
+    );
+  }
+
   // ---------------- Admin ----------------
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com';
   const password = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';

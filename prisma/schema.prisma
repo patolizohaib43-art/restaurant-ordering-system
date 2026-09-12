@@ -96,6 +96,7 @@ model Admin {
   lastLoginAt  DateTime?
 
   statusChanges OrderStatusHistory[]
+  pushSubscriptions PushSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -395,6 +396,27 @@ model Review {
 /// back to RestaurantSettings.deliveryFee when no areas are configured
 /// (see src/lib/pricing.ts) — existing single-flat-fee setups keep
 /// working unchanged.
+/// Phase 11: one row per admin device subscribed to Web Push. Multiple
+/// devices (phone, laptop, tablet) per admin are supported — each gets
+/// its own subscription. See src/lib/push.ts for how these are used.
+model PushSubscription {
+  id        String  @id @default(cuid())
+  adminId   String
+  admin     Admin   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  endpoint  String  @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  isActive  Boolean @default(true)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastUsedAt DateTime?
+
+  @@index([adminId])
+  @@map("push_subscriptions")
+}
+
 model DeliveryArea {
   id             String  @id @default(cuid())
   name           String

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { ImageUploadField } from '@/components/admin/ImageUploadField';
+import { PushNotificationSetup } from '@/components/admin/PushNotificationSetup';
 
 interface OpeningHoursDay {
   open: string;
@@ -708,6 +709,10 @@ function NotificationsSection({ settings, onSave }: SectionProps) {
         {permission === 'granted' && <Check size={18} className="shrink-0 text-green-600" />}
       </div>
 
+      <div className="mt-2.5">
+        <PushNotificationSetup />
+      </div>
+
       <div className="mt-2.5 flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-3">
         <div className="flex items-center gap-2">
           <Volume2 size={16} className="shrink-0 text-gray-500" />
@@ -723,11 +728,13 @@ function NotificationsSection({ settings, onSave }: SectionProps) {
       </div>
 
       <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
-        &quot;Push Notifications&quot; (alerts while the admin panel is fully closed) require a
-        separate Web Push setup — service worker, VAPID keys, and a push subscription per device —
-        which is not enabled here. Browser Notifications above work while this tab is open
-        (foreground or background), and the in-app bell/badge always works regardless of
-        permission. See README.md → Notifications for what a full Web Push setup would require.
+        &quot;Push Notifications&quot; above uses a real Web Push subscription (service worker +
+        VAPID), which is what can reach this device&apos;s Android/browser notification panel
+        even when the admin panel is fully closed — not the same as Browser Notifications above,
+        which only fire while this tab is open. Each device (phone, laptop, tablet) needs its own
+        Enable tap. If it shows &quot;Not supported&quot;, the site isn&apos;t running on HTTPS
+        (required for Web Push) or VAPID keys aren&apos;t configured on the server — see
+        README.md → Notifications.
       </p>
     </section>
   );

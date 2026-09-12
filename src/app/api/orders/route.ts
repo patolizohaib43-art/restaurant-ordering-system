@@ -6,6 +6,7 @@ import { priceOrder, PricingError } from '@/lib/pricing';
 import { generateOrderNumber, generateSecureToken } from '@/lib/tokens';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { formatCurrency } from '@/utils';
+import { sendPushToAllAdmins } from '@/lib/push';
 
 // Abuse protection: caps how many orders a single IP can place in a short
 // window (a genuine customer never needs more than this). See
@@ -116,6 +117,20 @@ export async function POST(request: NextRequest) {
       });
 
       return created;
+    });
+
+    // Outside the transaction on purpose — this is a network call to the
+    // push service, and must never hold a DB transaction open. Never
+    // throws (see src/lib/push.ts), so it can't fail order placement;
+    // await it so it actually completes before this serverless function
+    // returns and gets torn down.
+    const orderTypeLabel =
+      order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in';
+    await sendPushToAllAdmins({
+      title: 'Zaiqa-e-Sindh',
+      body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})`,
+      tag: `order-${order.id}`,
+      data: { orderId: order.id, orderNumber: order.orderNumber, url: `/admin/orders/${order.id}` },
     });
 
     return apiSuccess(

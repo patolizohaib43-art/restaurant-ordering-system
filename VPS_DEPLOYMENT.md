@@ -112,6 +112,12 @@ At minimum set `DATABASE_URL` (from step 3), a unique `JWT_SECRET`
 see `README.md` for why the timezone variable matters. Set
 `NODE_ENV=production`.
 
+For real push notifications to work (Settings → Notifications → Push),
+also generate and set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+and `VAPID_SUBJECT` — see `.env.example` and README.md → Notifications.
+These must be set **before** the build step below, since the public key
+gets baked into the JS bundle at build time.
+
 Keep `.env` readable only by `APP_USER`:
 
 ```bash

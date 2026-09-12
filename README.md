@@ -250,15 +250,50 @@ included, since it depends on the specific printer hardware chosen.
 - **Sound:** a short single beep (Web Audio API), not a loop — respects
   the browser's autoplay policy and simply stays silent if the browser
   blocks it, without breaking the rest of the notification.
-- **Web Push (true background push, browser fully closed): not
-  implemented.** This requires a service worker, VAPID keys, a
-  `push` subscription stored per admin device, and a server-side push
-  sender — meaningful extra infrastructure that wasn't justified for a
-  single-restaurant admin panel that's normally open during service
-  hours. The Web Notifications API used here only fires while the
-  admin panel tab is open (foreground or background tab, not fully
-  closed), which is why the in-app bell + badge remains the source of
-  truth and always works regardless of notification permission.
+- **Web Push (Phase 11) — real background push, browser/tab fully
+  closed.** Implemented with a service worker (`public/sw.js`), VAPID
+  keys, a `PushSubscription` stored per admin device
+  (`push_subscriptions` table — an admin can have multiple, e.g. phone
+  + laptop), and a server-side sender (`src/lib/push.ts`) triggered
+  right after every new order (`POST /api/orders`).
+  - **Setup required, or it's silently skipped:** generate a key pair
+    with `npx web-push generate-vapid-keys` and set
+    `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
+    `VAPID_SUBJECT` (see `.env.example`). Because
+    `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined into the JS bundle at
+    **build time**, it must be set in the hosting platform's
+    environment variables *before* running `npm run build` — adding it
+    to `.env` after the fact and only restarting the app is not
+    enough; a rebuild is required.
+  - **HTTPS is mandatory** for Web Push (browsers refuse
+    `pushManager.subscribe()` on plain HTTP). Vercel and any VPS
+    behind a valid TLS certificate (see `VPS_DEPLOYMENT.md`) both
+    satisfy this; `localhost` is exempted for local development.
+  - **Enabling it is a deliberate admin action:** Settings → Notifications
+    → "Push Notifications (this device)" → Enable. Permission is never
+    requested automatically on page load, only on that tap, and each
+    device needs its own tap.
+  - **Dead subscriptions:** if the push service reports an endpoint as
+    gone (HTTP 404/410 — e.g. the admin cleared browser data or
+    uninstalled the PWA), that subscription is deactivated
+    server-side automatically; new orders simply stop trying to reach
+    it.
+  - **What I could not verify myself:** I don't have a real Android
+    device or browser to test actual push delivery end-to-end, so
+    while the full architecture (service worker, subscription
+    storage, VAPID-signed send, click-to-open-order) is in place and
+    each piece is individually correct, **you should verify the exact
+    scenario yourself** — enable push on a phone, fully close the
+    browser, place a test order from another device, and confirm the
+    Android notification panel actually receives it and tapping it
+    opens the right order. If it doesn't, check (in order): VAPID env
+    vars actually set at build time, HTTPS in the address bar, the
+    service worker registered (DevTools → Application → Service
+    Workers), and a subscription row exists in `push_subscriptions`
+    for that device.
+  - The in-app bell + badge, and the plain Notification-API browser
+    alerts (only while a tab is open), remain fully functional
+    fallbacks regardless of whether push is configured.
 
 ---
 
