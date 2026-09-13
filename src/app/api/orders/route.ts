@@ -8,6 +8,9 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { formatCurrency } from '@/utils';
 import { sendPushToAllAdmins } from '@/lib/push';
 
+// Abuse protection: caps how many orders a single IP can place in a short
+// window (a genuine customer never needs more than this). See
+// src/lib/rate-limit.ts for the documented single-instance limitation.
 const ORDER_ATTEMPT_LIMIT = 15;
 const ORDER_WINDOW_MS = 15 * 60 * 1000;
 
@@ -31,6 +34,7 @@ export async function POST(request: NextRequest) {
       return apiError('Delivery address is required for delivery orders.');
     }
 
+    // Server-side price recomputation — the ONLY source of truth for totals.
     const pricing = await priceOrder(input.items, {
       orderType: input.orderType,
       couponCode: input.couponCode,
@@ -115,14 +119,20 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
+    // Awaited deliberately: on Vercel's serverless model, un-awaited
+    // ("fire and forget") work is NOT guaranteed to run — the function
+    // can be torn down the instant the response is sent, killing any
+    // pending push sends before they complete. Awaiting keeps push
+    // reliable; see sendPushToAllAdmins for why it never throws, so this
+    // can't itself fail order creation.
     const orderTypeLabel =
       order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in';
-    sendPushToAllAdmins({
+    await sendPushToAllAdmins({
       title: 'Zaiqa-e-Sindh',
       body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})`,
       tag: `order-${order.id}`,
       data: { orderId: order.id, orderNumber: order.orderNumber, url: `/admin/orders/${order.id}` },
-    }).catch((error) => console.error('Push notification send failed:', error));
+    });
 
     return apiSuccess(
       {
