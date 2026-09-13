@@ -75,3 +75,19 @@ export async function sendPushToAllAdmins(payload: PushPayload): Promise<void> {
     })
   );
 }
+
+/**
+ * Same as sendPushToAllAdmins, but bounded to at most `timeoutMs` total —
+ * used in the order-creation request path so a slow/hanging push service
+ * can never delay (or, on a serverless timeout, silently swallow) the
+ * customer's order confirmation response. If the timeout is hit, any
+ * push sends still in flight are abandoned (not cancelled — they may
+ * still complete and deliver in the background, we just stop waiting on
+ * them from the order-creation request).
+ */
+export async function sendPushToAllAdminsBounded(payload: PushPayload, timeoutMs = 3000): Promise<void> {
+  await Promise.race([
+    sendPushToAllAdmins(payload),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
