@@ -6,11 +6,8 @@ import { priceOrder, PricingError } from '@/lib/pricing';
 import { generateOrderNumber, generateSecureToken } from '@/lib/tokens';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { formatCurrency } from '@/utils';
-import { sendPushToAllAdminsBounded } from '@/lib/push';
+import { sendPushToAllAdmins } from '@/lib/push';
 
-// Abuse protection: caps how many orders a single IP can place in a short
-// window (a genuine customer never needs more than this). See
-// src/lib/rate-limit.ts for the documented single-instance limitation.
 const ORDER_ATTEMPT_LIMIT = 15;
 const ORDER_WINDOW_MS = 15 * 60 * 1000;
 
@@ -34,7 +31,6 @@ export async function POST(request: NextRequest) {
       return apiError('Delivery address is required for delivery orders.');
     }
 
-    // Server-side price recomputation — the ONLY source of truth for totals.
     const pricing = await priceOrder(input.items, {
       orderType: input.orderType,
       couponCode: input.couponCode,
@@ -119,19 +115,14 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
-    // Outside the transaction on purpose — this is a network call to the
-    // push service, and must never hold a DB transaction open. Bounded to
-    // 3s max (see sendPushToAllAdminsBounded): a slow/hanging push
-    // service must never delay — or, on a serverless function timeout,
-    // silently swallow — the customer's order confirmation response.
     const orderTypeLabel =
       order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in';
-    await sendPushToAllAdminsBounded({
+    sendPushToAllAdmins({
       title: 'Zaiqa-e-Sindh',
       body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})`,
       tag: `order-${order.id}`,
       data: { orderId: order.id, orderNumber: order.orderNumber, url: `/admin/orders/${order.id}` },
-    });
+    }).catch((error) => console.error('Push notification send failed:', error));
 
     return apiSuccess(
       {

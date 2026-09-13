@@ -11,10 +11,6 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   isConfigured = true;
 }
 
-/** True once VAPID keys are present — callers should skip push attempts
- * (and can fall back to in-app/polling only) when this is false, rather
- * than throwing on every order. See .env.example for how to generate
- * these keys. */
 export function isPushConfigured(): boolean {
   return isConfigured;
 }
@@ -26,19 +22,8 @@ export interface PushPayload {
   data?: Record<string, unknown>;
 }
 
-/**
- * Sends a Web Push notification to every active admin device subscription.
- * This is what actually reaches the Android notification panel even when
- * no admin browser tab is open — the push service (e.g. FCM under the
- * hood for Chrome) wakes the service worker on the device to display it.
- *
- * Never throws: a push failure must never block order creation. Dead
- * subscriptions (expired, unsubscribed, browser data cleared — reported
- * by the push service as HTTP 404/410) are deactivated so we stop
- * wasting requests on them.
- */
 export async function sendPushToAllAdmins(payload: PushPayload): Promise<void> {
-  if (!isConfigured) return; // no VAPID keys configured — nothing to do
+  if (!isConfigured) return;
 
   const subscriptions = await db.pushSubscription.findMany({
     where: { isActive: true },
@@ -64,7 +49,6 @@ export async function sendPushToAllAdmins(payload: PushPayload): Promise<void> {
       } catch (error: unknown) {
         const statusCode = (error as { statusCode?: number })?.statusCode;
         if (statusCode === 404 || statusCode === 410) {
-          // Push service confirms this endpoint is gone for good.
           await db.pushSubscription
             .update({ where: { id: sub.id }, data: { isActive: false } })
             .catch(() => {});
@@ -74,20 +58,4 @@ export async function sendPushToAllAdmins(payload: PushPayload): Promise<void> {
       }
     })
   );
-}
-
-/**
- * Same as sendPushToAllAdmins, but bounded to at most `timeoutMs` total —
- * used in the order-creation request path so a slow/hanging push service
- * can never delay (or, on a serverless timeout, silently swallow) the
- * customer's order confirmation response. If the timeout is hit, any
- * push sends still in flight are abandoned (not cancelled — they may
- * still complete and deliver in the background, we just stop waiting on
- * them from the order-creation request).
- */
-export async function sendPushToAllAdminsBounded(payload: PushPayload, timeoutMs = 3000): Promise<void> {
-  await Promise.race([
-    sendPushToAllAdmins(payload),
-    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-  ]);
 }
