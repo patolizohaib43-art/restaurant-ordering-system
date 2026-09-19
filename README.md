@@ -304,31 +304,30 @@ upload from the admin panel (gallery/file picker — no manual URL
 copy-pasting required), alongside the option to paste an external image
 URL instead.
 
+- **Storage: Cloudinary.** Persistent, Vercel-compatible storage —
+  uploaded images survive every deployment and cold start, unlike
+  anything written to Vercel's serverless filesystem. Requires
+  `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
+  `CLOUDINARY_API_SECRET` (see `.env.example` for where to get these —
+  free tier is enough for a single restaurant). Without these set,
+  uploads are disabled with a clear error message rather than silently
+  falling back to temporary storage; pasting an Image URL still works
+  either way.
 - **Validation:** uploads are checked by their actual file bytes (not
   just the claimed MIME type or filename), capped at 5MB, and limited
   to JPEG/PNG/WEBP/GIF. Every upload requires an authenticated admin
   session.
-- **Optimization:** non-GIF images are automatically resized (max 1600px
-  on the longest side, never upscaled) and re-encoded to WebP before
-  being stored — smaller files, faster menu loads. Animated GIFs are
-  stored as-is to preserve the animation.
-- **Storage location:** controlled by the `UPLOAD_DIR` environment
-  variable (see `.env.example`).
-  - **Unset (Vercel demo / local dev):** defaults to `public/uploads`,
-    served automatically as static files. On Vercel's serverless
-    filesystem this is **ephemeral** — uploaded files can disappear on
-    the next deploy or cold start, which is why the demo also accepts a
-    plain image URL as a fallback.
-  - **Set to a VPS path** (e.g. `/var/www/zaika-e-sindh/uploads`):
-    files persist normally across restarts and deploys, organized into
-    `products/`, `categories/`, `deals/`, and `restaurant/`
-    subfolders, and served through `/api/uploads/...`. See
-    `VPS_DEPLOYMENT.md` → "Image uploads (persistent storage)" for the
-    one-time folder + permissions setup.
+- **Optimization:** Cloudinary resizes (max 1600px on the longest side)
+  and serves each image in the best format/quality for the requesting
+  browser automatically.
 - **Cleanup:** replacing or removing an image (or deleting the product
-  /category/deal it belongs to) deletes the old file from disk — but
-  only files this app manages under `UPLOAD_DIR`; pasted external URLs
-  are never touched.
+  /category/deal it belongs to) deletes the old image from Cloudinary —
+  but only images this app uploaded; pasted external URLs are never
+  touched.
+- **VPS alternative:** if you'd rather self-host images on a VPS instead
+  of Cloudinary, set `UPLOAD_DIR` to a persistent local path — see
+  `VPS_DEPLOYMENT.md` → "Image uploads (persistent storage)". This is
+  an alternative to Cloudinary, not required alongside it.
 
 ---
 

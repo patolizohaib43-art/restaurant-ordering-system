@@ -1,17 +1,13 @@
 import { NextRequest } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
-import sharp from 'sharp';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAdminSession } from '@/lib/auth';
-import { getUploadDir, getPublicUploadPrefix, isUploadFolder } from '@/lib/uploads';
+import { isUploadFolder } from '@/lib/uploads';
+import { isCloudinaryConfigured, uploadImageToCloudinary } from '@/lib/cloudinary';
 
 export const runtime = 'nodejs';
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-const MAX_DIMENSION = 1600; // px, longest side — plenty for menu/product cards
-const WEBP_QUALITY = 82;
 
 type DetectedType = 'jpeg' | 'png' | 'gif' | 'webp';
 
@@ -68,6 +64,13 @@ export async function POST(request: NextRequest) {
       return apiError('Unauthorized.', 401);
     }
 
+    if (!isCloudinaryConfigured()) {
+      return apiError(
+        'Image upload is not configured on the server. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET, or paste an Image URL instead.',
+        500
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
     const folderInput = formData.get('folder');
@@ -86,44 +89,20 @@ export async function POST(request: NextRequest) {
       return apiError('Only JPEG, PNG, WEBP, or GIF images are allowed.');
     }
 
-    const uploadDir = path.join(getUploadDir(), folder);
-    await mkdir(uploadDir, { recursive: true });
+    // Random public_id — the original filename is never trusted or used,
+    // which rules out path traversal and any attempt to overwrite an
+    // existing image by guessing its name.
+    const publicId = crypto.randomBytes(16).toString('hex');
 
-    // Random filename — the original filename is never trusted or used,
-    // which rules out path traversal ("../../") and any attempt to
-    // overwrite an existing file by guessing its name.
-    const uniqueId = crypto.randomBytes(16).toString('hex');
+    // Cloudinary itself handles resizing/compression/format selection on
+    // delivery (see src/lib/cloudinary.ts) — persistent storage that
+    // survives Vercel deployments and cold starts, unlike anything
+    // written to the serverless filesystem.
+    const url = await uploadImageToCloudinary(inputBytes, folder, publicId);
 
-    let outputBytes: Buffer;
-    let outputExt: string;
-
-    if (detectedType === 'gif') {
-      // Resizing/re-encoding an animated GIF risks flattening it to a
-      // single frame, so animated GIFs are stored as-is. Still bounded
-      // by the 5MB size cap above.
-      outputBytes = inputBytes;
-      outputExt = 'gif';
-    } else {
-      // Resize (never upscale) and re-encode to WebP for everything else
-      // — smaller files, consistent format, faster menu/product loads.
-      outputBytes = await sharp(inputBytes)
-        .rotate() // respect EXIF orientation from phone cameras
-        .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: WEBP_QUALITY })
-        .toBuffer();
-      outputExt = 'webp';
-    }
-
-    const filename = `${uniqueId}.${outputExt}`;
-    await writeFile(path.join(uploadDir, filename), outputBytes);
-
-    const url = `${getPublicUploadPrefix()}/${folder}/${filename}`;
     return apiSuccess({ url }, 201);
   } catch (error) {
     console.error('POST /api/admin/upload failed:', error);
-    return apiError(
-      'Could not upload image. On serverless hosts like Vercel, use the Image URL field instead.',
-      500
-    );
+    return apiError('Could not upload image. Please try again, or paste an Image URL instead.', 500);
   }
 }

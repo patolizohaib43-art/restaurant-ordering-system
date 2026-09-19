@@ -107,9 +107,8 @@ export function ImageUploadField({
 
       {uploadError && <p className="mt-1.5 text-xs text-red-600">{uploadError}</p>}
       <p className="mt-1.5 text-[11px] text-gray-400">
-        Uploaded images are resized and compressed automatically. On the Vercel demo, uploaded
-        files may not persist between deployments — paste an Image URL for anything permanent.
-        On a VPS deployment, uploads persist normally.
+        Uploaded images are resized, compressed, and stored permanently — they&apos;ll still be
+        there after the next deployment. You can also paste an external Image URL instead.
       </p>
     </div>
   );

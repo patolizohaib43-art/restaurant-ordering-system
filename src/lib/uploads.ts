@@ -1,5 +1,6 @@
 import path from 'path';
 import { unlink } from 'fs/promises';
+import { deleteImageFromCloudinary } from '@/lib/cloudinary';
 
 /**
  * Where uploaded images are written on disk.
@@ -44,19 +45,29 @@ export function isUploadFolder(value: unknown): value is UploadFolder {
 }
 
 /**
- * Deletes a previously-uploaded file, given the public URL that was
- * returned when it was uploaded. Silently does nothing for:
- *  - external URLs (http/https) — never something we manage or own
- *  - anything outside our own upload prefix — safety net against
- *    accidentally deleting arbitrary files
+ * Deletes a previously-uploaded image, given the URL that was stored for
+ * it. Handles both:
+ *  - Cloudinary URLs (current uploads, see src/lib/cloudinary.ts) — the
+ *    only case that actually does anything on Vercel, since Cloudinary
+ *    is the persistent store there.
+ *  - Old local `/uploads/...` URLs from before this app switched to
+ *    Cloudinary, or on a VPS deployment using UPLOAD_DIR — kept for
+ *    backward compatibility so existing rows don't error out.
+ * Silently no-ops for any external URL that isn't one of ours.
  *
- * Best-effort only: a missing file or permission error is swallowed,
- * since a failed cleanup should never block the actual save/delete the
- * caller is performing.
+ * Best-effort only: a missing file/image or permission error is
+ * swallowed, since a failed cleanup should never block the actual
+ * save/delete the caller is performing.
  */
 export async function deleteUploadedFileIfManaged(url: string | null | undefined): Promise<void> {
   if (!url) return;
-  if (/^https?:\/\//i.test(url)) return; // external link, not ours to delete
+
+  if (/^https?:\/\//i.test(url)) {
+    // Only actually deletes if this URL is recognized as one of our own
+    // Cloudinary uploads — every other external link is left untouched.
+    await deleteImageFromCloudinary(url);
+    return;
+  }
 
   const prefix = getPublicUploadPrefix();
   if (!url.startsWith(`${prefix}/`)) return;
