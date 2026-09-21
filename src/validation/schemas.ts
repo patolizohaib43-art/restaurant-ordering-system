@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const orderLookupSchema = z.object({
-  orderNumber: z.string().trim().min(3).max(40),
   phone: z.string().trim().min(6).max(30),
 });
 
@@ -68,16 +67,28 @@ export const createOrderSchema = z.object({
   couponCode: z.string().max(30).optional(),
   dealId: z.string().min(1).optional(),
   paymentMethod: z.enum(['CASH_ON_DELIVERY', 'CARD', 'ONLINE_WALLET']),
-  items: z
+  items: z.array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: z.number().int().positive().max(50),
+      specialInstructions: z.string().max(300).optional(),
+      addonIds: z.array(z.string().min(1)).optional(),
+    })
+  ),
+  // Phase 12: bundle deals added as their own cart line items — a cart
+  // may contain only bundle deals, only regular products, or a mix; the
+  // refinement below requires at least one of the two arrays.
+  dealBundles: z
     .array(
       z.object({
-        productId: z.string().min(1),
+        dealId: z.string().min(1),
         quantity: z.number().int().positive().max(50),
-        specialInstructions: z.string().max(300).optional(),
-        addonIds: z.array(z.string().min(1)).optional(),
       })
     )
-    .min(1, 'Order must contain at least one item'),
+    .optional(),
+}).refine((data) => data.items.length > 0 || (data.dealBundles && data.dealBundles.length > 0), {
+  message: 'Order must contain at least one item',
+  path: ['items'],
 });
 
 export const couponValidateSchema = z.object({

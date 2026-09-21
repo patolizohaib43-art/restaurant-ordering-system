@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       orderType: input.orderType,
       couponCode: input.couponCode,
       dealId: input.dealId,
+      dealBundles: input.dealBundles,
       deliveryAreaId: input.deliveryAreaId,
     });
 
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
               quantity: item.quantity,
               subtotal: item.subtotal,
               specialInstructions: item.specialInstructions ?? null,
+              dealId: item.dealId ?? null,
+              dealItemsSnapshot: item.dealItemsSnapshot ?? undefined,
               addons: {
                 create: item.addons.map((addon) => ({
                   addonId: addon.addonId,

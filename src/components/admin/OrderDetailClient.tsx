@@ -38,6 +38,8 @@ interface OrderDetail {
     quantity: number;
     subtotal: string;
     specialInstructions: string | null;
+    dealId: string | null;
+    dealItemsSnapshot: { name: string; quantity: number }[] | null;
     addons: { name: string; price: string; quantity: number }[];
   }[];
   statusHistory: { status: string; note: string | null; changedBy: string | null; createdAt: string }[];
@@ -170,7 +172,17 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
               <div>
                 <p className="font-medium text-gray-800">
                   {item.quantity}× {item.productName}
+                  {item.dealId && (
+                    <span className="ml-1.5 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                      Deal
+                    </span>
+                  )}
                 </p>
+                {item.dealItemsSnapshot && item.dealItemsSnapshot.length > 0 && (
+                  <p className="text-xs text-gray-400">
+                    Includes: {item.dealItemsSnapshot.map((di) => `${di.quantity}× ${di.name}`).join(' + ')}
+                  </p>
+                )}
                 {item.addons.length > 0 && (
                   <p className="text-xs text-gray-400">{item.addons.map((a) => a.name).join(', ')}</p>
                 )}

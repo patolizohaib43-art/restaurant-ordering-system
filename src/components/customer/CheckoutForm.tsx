@@ -144,12 +144,20 @@ export function CheckoutForm() {
           couponCode: couponFromCart || undefined,
           dealId: dealFromCart || undefined,
           paymentMethod: 'CASH_ON_DELIVERY',
-          items: items.map((i) => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            specialInstructions: i.specialInstructions,
-            addonIds: i.addons.map((a) => a.addonId),
-          })),
+          items: items
+            .filter((i) => !i.dealId)
+            .map((i) => ({
+              productId: i.productId as string,
+              quantity: i.quantity,
+              specialInstructions: i.specialInstructions,
+              addonIds: i.addons.map((a) => a.addonId),
+            })),
+          // Phase 12: bundle deals (e.g. "Deal 1") added as their own cart
+          // line items, separate from the order-level discount deal
+          // (`dealId` above, selected via DealSelectBox on the cart page).
+          dealBundles: items
+            .filter((i) => i.dealId)
+            .map((i) => ({ dealId: i.dealId as string, quantity: i.quantity })),
         }),
       });
       const json = await res.json();

@@ -149,6 +149,7 @@ model Product {
   addons     ProductAddon[]
   orderItems OrderItem[]
   reviews    Review[]
+  dealItems  DealItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -193,6 +194,16 @@ model Deal {
   startDate       DateTime
   endDate         DateTime
   isActive        Boolean      @default(true)
+
+  /// Phase 12: bundle deals. When bundlePrice is set and dealItems is
+  /// non-empty, this deal is orderable directly as a cart line item (a
+  /// fixed-price bundle of specific products) instead of — or alongside
+  /// — being a selectable order-level discount above. The two concepts
+  /// are independent: discountType/discountValue keep working exactly as
+  /// before for existing promotional deals with no dealItems.
+  bundlePrice Decimal? @db.Decimal(10, 2)
+  dealItems   DealItem[]
+  orderItems  OrderItem[] @relation("OrderItemDeal")
 
   // Phase 5: orders that redeemed this deal — powers real Deal Performance
   // analytics instead of estimated/fake numbers.
@@ -305,6 +316,16 @@ model OrderItem {
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
+  /// Phase 12: set instead of productId when this line item is a bundle
+  /// deal (e.g. "Deal 1") rather than a single product. dealItemsSnapshot
+  /// freezes the bundle's contents (product names + quantities) exactly
+  /// as they were at order time, so the admin Order view always shows
+  /// what the customer actually received — even if the deal's contents
+  /// or the underlying products change or are deleted later.
+  dealId            String?
+  deal              Deal?   @relation("OrderItemDeal", fields: [dealId], references: [id], onDelete: SetNull)
+  dealItemsSnapshot Json?
+
   // Snapshots: preserve historical accuracy even if the product
   // is later renamed, repriced, or deleted.
   productName String
@@ -415,6 +436,23 @@ model PushSubscription {
 
   @@index([adminId])
   @@map("push_subscriptions")
+}
+
+/// Phase 12: one row per product included in a bundle deal (e.g. "Deal 1"
+/// = 1x Zinger Burger + 1x Cold Drink). Purely a template — what actually
+/// gets charged/shown on an order is a snapshot taken at order time (see
+/// OrderItem.dealItemsSnapshot), so editing a deal's contents later never
+/// rewrites history.
+model DealItem {
+  id        String  @id @default(cuid())
+  dealId    String
+  deal      Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int     @default(1)
+
+  @@index([dealId])
+  @@map("deal_items")
 }
 
 model DeliveryArea {

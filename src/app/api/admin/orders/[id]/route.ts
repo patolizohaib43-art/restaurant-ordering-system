@@ -51,6 +51,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         quantity: item.quantity,
         subtotal: item.subtotal.toString(),
         specialInstructions: item.specialInstructions,
+        dealId: item.dealId,
+        dealItemsSnapshot: item.dealItemsSnapshot,
         addons: item.addons.map((a: any) => ({
           name: a.addonName,
           price: a.price.toString(),

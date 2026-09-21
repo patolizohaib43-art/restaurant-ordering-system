@@ -10,7 +10,11 @@ export interface CartAddon {
 
 export interface CartItem {
   key: string;
-  productId: string;
+  /** Set for a regular product; omitted for a bundle-deal line item. */
+  productId?: string;
+  /** Phase 12: set when this cart line is a bundle deal (e.g. "Deal 1")
+   * rather than a single product — mutually exclusive with productId. */
+  dealId?: string;
   name: string;
   slug: string;
   imageUrl: string | null;
@@ -40,12 +44,12 @@ const STORAGE_KEY = 'zaiqa_cart_v1';
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function buildKey(productId: string, addons: CartAddon[], specialInstructions?: string): string {
+function buildKey(identity: string, addons: CartAddon[], specialInstructions?: string): string {
   const addonPart = addons
     .map((a) => a.addonId)
     .sort()
     .join(',');
-  return `${productId}::${addonPart}::${specialInstructions?.trim() ?? ''}`;
+  return `${identity}::${addonPart}::${specialInstructions?.trim() ?? ''}`;
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -77,7 +81,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [state, isHydrated]);
 
   const addItem: CartContextValue['addItem'] = (item) => {
-    const key = buildKey(item.productId, item.addons, item.specialInstructions);
+    // Deal-bundle items key off `deal:<id>` (a namespace that can never
+    // collide with a real productId), so this is purely additive — the
+    // key generated for existing product-only add flows is byte-for-byte
+    // identical to before.
+    const identity = item.dealId ? `deal:${item.dealId}` : (item.productId as string);
+    const key = buildKey(identity, item.addons, item.specialInstructions);
     setState((prev) => {
       const existingIndex = prev.items.findIndex((i) => i.key === key);
       if (existingIndex >= 0) {

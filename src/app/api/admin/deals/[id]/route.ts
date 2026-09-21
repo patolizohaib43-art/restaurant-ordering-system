@@ -14,6 +14,15 @@ const updateSchema = z.object({
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   isActive: z.boolean().optional(),
+  bundlePrice: z.number().positive().nullable().optional(),
+  dealItems: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().positive().max(20),
+      })
+    )
+    .optional(),
 });
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -34,7 +43,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     }
 
-    const deal = await db.deal.update({ where: { id: params.id }, data: parsed.data });
+    // dealItems, if included in the payload, is a full replacement of the
+    // bundle's contents — simplest correct approach for a small list
+    // (delete-then-recreate), and existing orders keep their own frozen
+    // dealItemsSnapshot regardless (see OrderItem.dealItemsSnapshot).
+    const { dealItems, ...rest } = parsed.data;
+
+    const deal = await db.deal.update({
+      where: { id: params.id },
+      data: {
+        ...rest,
+        ...(dealItems !== undefined && {
+          dealItems: {
+            deleteMany: {},
+            create: dealItems.map((di) => ({ productId: di.productId, quantity: di.quantity })),
+          },
+        }),
+      },
+    });
     return apiSuccess(deal);
   } catch (error: any) {
     if (error?.code === 'P2025') return apiError('Deal not found.', 404);

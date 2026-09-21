@@ -16,6 +16,15 @@ export interface RequestedItem {
   addonIds?: string[];
 }
 
+/** Phase 12: a bundle deal added to the cart as its own line item (e.g.
+ * "Deal 1" x2), distinct from the existing order-level discount deal
+ * selected via `options.dealId` below — the two are independent
+ * features and can both be present on the same order. */
+export interface RequestedDealBundle {
+  dealId: string;
+  quantity: number;
+}
+
 export interface PricedAddon {
   addonId: string;
   name: string;
@@ -24,13 +33,18 @@ export interface PricedAddon {
 }
 
 export interface PricedItem {
-  productId: string;
+  /** null for a bundle-deal line item (see dealId below) */
+  productId: string | null;
   productName: string;
   unitPrice: Prisma.Decimal;
   quantity: number;
   subtotal: Prisma.Decimal;
   specialInstructions?: string;
   addons: PricedAddon[];
+  /** Set only for a bundle-deal line item. */
+  dealId?: string;
+  /** Frozen snapshot of the bundle's contents at order time. */
+  dealItemsSnapshot?: { name: string; quantity: number }[];
 }
 
 export interface PricingResult {
@@ -58,13 +72,15 @@ export async function priceOrder(
     orderType: 'DELIVERY' | 'PICKUP' | 'DINE_IN';
     couponCode?: string;
     dealId?: string;
+    /** Phase 12: bundle deals added as cart line items. */
+    dealBundles?: RequestedDealBundle[];
     /** Structured delivery-zone selection (Phase 10). When provided and
      * valid, its `deliveryFee` overrides settings.deliveryFee. Always
      * re-validated server-side — the client-selected fee is never trusted. */
     deliveryAreaId?: string;
   }
 ): Promise<PricingResult> {
-  if (requestedItems.length === 0) {
+  if (requestedItems.length === 0 && !(options.dealBundles && options.dealBundles.length > 0)) {
     throw new PricingError('Your cart is empty.');
   }
 
@@ -151,6 +167,55 @@ export async function priceOrder(
     });
 
     subtotal = subtotal.plus(lineSubtotal);
+  }
+
+  // ---- Bundle deals (Phase 12) — priced independently of, and added on
+  // top of, the regular product items above. Each is its own line item
+  // at the deal's fixed bundlePrice; the component products inside it are
+  // never separately charged. ----
+  if (options.dealBundles && options.dealBundles.length > 0) {
+    const dealIds = [...new Set(options.dealBundles.map((d) => d.dealId))];
+    const deals = await db.deal.findMany({
+      where: { id: { in: dealIds } },
+      include: { dealItems: { include: { product: true } } },
+    });
+    const dealMap = new Map(deals.map((d) => [d.id, d]));
+    const now = new Date();
+
+    for (const requested of options.dealBundles) {
+      const deal = dealMap.get(requested.dealId);
+
+      if (!deal) {
+        throw new PricingError('One of the deals in your cart no longer exists.');
+      }
+      if (!deal.isActive || now < deal.startDate || now > deal.endDate) {
+        throw new PricingError(`"${deal.title}" is no longer available.`);
+      }
+      if (deal.bundlePrice == null || deal.dealItems.length === 0) {
+        throw new PricingError(`"${deal.title}" is not available as a bundle.`);
+      }
+      if (!Number.isInteger(requested.quantity) || requested.quantity <= 0) {
+        throw new PricingError(`Invalid quantity for "${deal.title}".`);
+      }
+
+      const lineSubtotal = deal.bundlePrice.times(requested.quantity);
+
+      pricedItems.push({
+        productId: null,
+        productName: deal.title,
+        unitPrice: deal.bundlePrice,
+        quantity: requested.quantity,
+        subtotal: lineSubtotal,
+        addons: [],
+        dealId: deal.id,
+        dealItemsSnapshot: deal.dealItems.map((di) => ({
+          name: di.product.name,
+          quantity: di.quantity,
+        })),
+      });
+
+      subtotal = subtotal.plus(lineSubtotal);
+    }
   }
 
   if (subtotal.lessThan(settings.minOrderAmount)) {

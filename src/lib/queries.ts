@@ -165,6 +165,11 @@ export async function getActiveDeals(limit = 10) {
     where: { isActive: true, startDate: { lte: now }, endDate: { gte: now } },
     orderBy: { endDate: 'asc' },
     take: limit,
+    include: {
+      dealItems: {
+        include: { product: { select: { name: true, imageUrl: true, isAvailable: true } } },
+      },
+    },
   });
 
   return deals.map((d) => ({
@@ -176,5 +181,16 @@ export async function getActiveDeals(limit = 10) {
     discountValue: d.discountValue.toString(),
     minOrderAmount: d.minOrderAmount?.toString() ?? null,
     endDate: d.endDate.toISOString(),
+    // Phase 12: bundle deals — orderable directly as a cart line item.
+    // `bundleAvailable` is false if any component product has since
+    // become unavailable, so the storefront can hide the Add-to-cart
+    // button rather than let the customer order something that would
+    // fail server-side pricing.
+    bundlePrice: d.bundlePrice?.toString() ?? null,
+    dealItems: d.dealItems.map((di) => ({
+      productName: di.product.name,
+      quantity: di.quantity,
+    })),
+    bundleAvailable: d.dealItems.length > 0 && d.dealItems.every((di) => di.product.isAvailable),
   }));
 }

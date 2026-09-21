@@ -13,16 +13,37 @@ const dealSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   isActive: z.boolean().optional(),
+  // Phase 12: bundle deals. Both optional — omit to keep a deal as a
+  // plain order-level discount, exactly as before.
+  bundlePrice: z.number().positive().nullable().optional(),
+  dealItems: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().positive().max(20),
+      })
+    )
+    .optional(),
 });
 
 export async function GET() {
   try {
-    const deals = await db.deal.findMany({ orderBy: { createdAt: 'desc' } });
+    const deals = await db.deal.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { dealItems: { include: { product: { select: { name: true } } } } },
+    });
     return apiSuccess(
       deals.map((d) => ({
         ...d,
         discountValue: d.discountValue.toString(),
         minOrderAmount: d.minOrderAmount?.toString() ?? null,
+        bundlePrice: d.bundlePrice?.toString() ?? null,
+        dealItems: d.dealItems.map((di) => ({
+          id: di.id,
+          productId: di.productId,
+          productName: di.product.name,
+          quantity: di.quantity,
+        })),
       }))
     );
   } catch (error) {
@@ -46,6 +67,9 @@ export async function POST(request: NextRequest) {
     if (data.discountType === 'PERCENTAGE' && data.discountValue > 100) {
       return apiError('Percentage discount cannot exceed 100%.');
     }
+    if (data.dealItems && data.dealItems.length > 0 && !data.bundlePrice) {
+      return apiError('Set a bundle price for the selected items.');
+    }
 
     const deal = await db.deal.create({
       data: {
@@ -58,6 +82,13 @@ export async function POST(request: NextRequest) {
         startDate: data.startDate,
         endDate: data.endDate,
         isActive: data.isActive ?? true,
+        bundlePrice: data.bundlePrice ?? null,
+        ...(data.dealItems &&
+          data.dealItems.length > 0 && {
+            dealItems: {
+              create: data.dealItems.map((di) => ({ productId: di.productId, quantity: di.quantity })),
+            },
+          }),
       },
     });
 
