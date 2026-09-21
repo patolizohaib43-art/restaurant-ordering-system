@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { OrderStatus } from '@prisma/client';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { orderLookupSchema } from '@/validation/schemas';
@@ -12,7 +13,7 @@ const LOOKUP_WINDOW_MS = 15 * 60 * 1000;
 
 // "Active/incomplete" — anything that isn't a final state. Kept local to
 // this route since it's the only place that needs this specific grouping.
-const ACTIVE_STATUSES = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'] as const;
+const ACTIVE_STATUSES: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
 
 function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '');
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     const since = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
     const candidates = await db.order.findMany({
-      where: { status: { in: ACTIVE_STATUSES as unknown as string[] }, createdAt: { gte: since } },
+      where: { status: { in: ACTIVE_STATUSES }, createdAt: { gte: since } },
       select: {
         trackingToken: true,
         orderNumber: true,
