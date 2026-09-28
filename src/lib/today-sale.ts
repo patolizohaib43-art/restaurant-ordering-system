@@ -13,30 +13,45 @@ const num = (v: unknown) => Number(v ?? 0);
  * Online (Easypaisa/JazzCash) orders additionally need paymentStatus
  * PAID, so an unverified/failed online payment never inflates the total.
  * Pending, in-progress, cancelled and rejected orders are excluded from
- * the money figures. Membership in a session is decided by when the
- * order was placed (createdAt), matching the existing Reports rules.
+ * the money figures.
+ *
+ * Membership in a session is decided by WHEN THE ORDER WAS COMPLETED
+ * (the Delivered/Completed entry in its status history), so an order
+ * placed at 5:50 PM and delivered at 6:20 PM belongs to the session in
+ * which the money was actually collected. Older orders with no history
+ * entry fall back to their last-updated time.
  */
 export async function getSessionSale(session: BusinessSession) {
-  const inSession = { createdAt: { gte: session.start, lt: session.end } };
+  const range = { gte: session.start, lt: session.end };
+  const placedInSession = { createdAt: range };
+  const completedInSession = {
+    status: { in: [...COMPLETED] },
+    OR: [
+      { statusHistory: { some: { status: { in: [...COMPLETED] }, createdAt: range } } },
+      {
+        statusHistory: { none: { status: { in: [...COMPLETED] } } },
+        updatedAt: range,
+      },
+    ],
+  };
 
   const [cod, online, activeOrders, totalOrders] = await Promise.all([
     db.order.aggregate({
-      where: { ...inSession, status: { in: [...COMPLETED] }, paymentMethod: 'CASH_ON_DELIVERY' },
+      where: { ...completedInSession, paymentMethod: 'CASH_ON_DELIVERY' },
       _sum: { totalAmount: true },
       _count: { _all: true },
     }),
     db.order.aggregate({
       where: {
-        ...inSession,
-        status: { in: [...COMPLETED] },
+        ...completedInSession,
         paymentMethod: 'ONLINE_WALLET',
         paymentStatus: 'PAID',
       },
       _sum: { totalAmount: true },
       _count: { _all: true },
     }),
-    db.order.count({ where: { ...inSession, status: { in: [...ACTIVE] } } }),
-    db.order.count({ where: inSession }),
+    db.order.count({ where: { ...placedInSession, status: { in: [...ACTIVE] } } }),
+    db.order.count({ where: placedInSession }),
   ]);
 
   const codAmount = num(cod._sum.totalAmount);
