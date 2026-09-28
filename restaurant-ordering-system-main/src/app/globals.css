@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none;
+  }
+}
+
+/* Safety net so an accidental Ctrl+P anywhere in the app never prints
+   the light-gray app background or app chrome. The thermal receipt
+   page (src/components/admin/receipt/receipt.css) layers its own
+   stricter print rules on top of this for the actual receipt output. */
+@media print {
+  body {
+    background: #fff !important;
+  }
+}

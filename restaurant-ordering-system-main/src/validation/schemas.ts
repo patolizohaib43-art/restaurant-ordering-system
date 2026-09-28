@@ -1,0 +1,192 @@
+import { z } from 'zod';
+
+// Track by mobile number and/or the tracking tokens of orders placed on
+// this device. At least one is required.
+export const orderLookupSchema = z
+  .object({
+    phone: z.string().trim().min(6).max(30).optional(),
+    tokens: z.array(z.string().min(10).max(100)).max(10).optional(),
+  })
+  .refine((d) => !!d.phone || (d.tokens && d.tokens.length > 0), {
+    message: 'Enter your mobile number.',
+  });
+
+export const adminLoginSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+export const categorySchema = z.object({
+  name: z.string().min(2).max(100),
+  description: z.string().max(500).optional(),
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export const productSchema = z.object({
+  categoryId: z.string().cuid(),
+  name: z.string().min(2).max(150),
+  description: z.string().max(1000).optional(),
+  price: z.number().positive('Price must be greater than 0'),
+  discountPrice: z.number().positive().optional(),
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  isAvailable: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  preparationTime: z.number().int().positive().optional(),
+});
+
+export const productAddonSchema = z.object({
+  productId: z.string().cuid(),
+  name: z.string().min(1).max(100),
+  price: z.number().min(0),
+  maxQuantity: z.number().int().positive().default(1),
+});
+
+export const couponSchema = z.object({
+  code: z
+    .string()
+    .min(3)
+    .max(30)
+    .regex(/^[A-Z0-9_-]+$/, 'Code must be uppercase letters, numbers, - or _'),
+  discountType: z.enum(['PERCENTAGE', 'FIXED']),
+  discountValue: z.number().positive(),
+  minOrderAmount: z.number().min(0).optional(),
+  maxDiscountAmount: z.number().min(0).optional(),
+  usageLimit: z.number().int().positive().optional(),
+  validFrom: z.coerce.date(),
+  validUntil: z.coerce.date(),
+});
+
+export const createOrderSchema = z.object({
+  customerName: z.string().min(2, 'Enter your name').max(100),
+  customerPhone: z
+    .string()
+    .min(7, 'Enter a valid mobile number')
+    .max(20)
+    .regex(/^[0-9+\-\s()]+$/, 'Enter a valid mobile number'),
+  customerEmail: z.string().email().optional().or(z.literal('')),
+  orderType: z.enum(['DELIVERY', 'PICKUP', 'DINE_IN']),
+  deliveryAddress: z.string().max(300).optional(),
+  area: z.string().max(100).optional(),
+  deliveryAreaId: z.string().min(1).optional(),
+  deliveryInstructions: z.string().max(300).optional(),
+  couponCode: z.string().max(30).optional(),
+  dealId: z.string().min(1).optional(),
+  // Only Cash on Delivery and manual wallet payment (Easypaisa/JazzCash)
+  // are supported — there is no card gateway, so CARD is rejected.
+  paymentMethod: z.enum(['CASH_ON_DELIVERY', 'ONLINE_WALLET']).default('CASH_ON_DELIVERY'),
+  paymentProvider: z.enum(['EASYPAISA', 'JAZZCASH']).optional(),
+  paymentReference: z
+    .string()
+    .trim()
+    .min(6, 'Enter the transaction ID from your payment receipt')
+    .max(40)
+    .regex(/^[A-Za-z0-9\-_]+$/, 'Transaction ID can only contain letters and numbers')
+    .optional(),
+  paymentSenderNumber: z
+    .string()
+    .trim()
+    .min(7, 'Enter the mobile number you paid from')
+    .max(20)
+    .regex(/^[0-9+\-\s()]+$/, 'Enter a valid mobile number')
+    .optional(),
+  items: z.array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: z.number().int().positive().max(50),
+      specialInstructions: z.string().max(300).optional(),
+      addonIds: z.array(z.string().min(1)).optional(),
+    })
+  ),
+  // Phase 12: bundle deals added as their own cart line items — a cart
+  // may contain only bundle deals, only regular products, or a mix; the
+  // refinement below requires at least one of the two arrays.
+  dealBundles: z
+    .array(
+      z.object({
+        dealId: z.string().min(1),
+        quantity: z.number().int().positive().max(50),
+      })
+    )
+    .optional(),
+}).refine((data) => data.items.length > 0 || (data.dealBundles && data.dealBundles.length > 0), {
+  message: 'Order must contain at least one item',
+  path: ['items'],
+}).refine(
+  (data) =>
+    data.paymentMethod !== 'ONLINE_WALLET' ||
+    (!!data.paymentProvider && !!data.paymentReference && !!data.paymentSenderNumber),
+  {
+    message: 'For online payment, choose Easypaisa or JazzCash and enter your transaction ID and paying number.',
+    path: ['paymentReference'],
+  }
+);
+
+export const couponValidateSchema = z.object({
+  code: z.string().min(1).max(30),
+  subtotal: z.number().min(0),
+});
+
+export const reviewSchema = z.object({
+  trackingToken: z.string().min(10),
+  productId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(500).optional(),
+});
+
+export const printSettingsSchema = z.object({
+  receiptWidth: z.enum(['MM_58', 'MM_80']).optional(),
+  autoPrintNewOrders: z.boolean().optional(),
+  notificationSoundEnabled: z.boolean().optional(),
+  restaurantName: z.string().trim().min(1).max(120).optional(),
+  tagline: z.string().trim().max(160).optional(),
+  logoUrl: z.string().trim().max(500).optional(),
+  // ---------------- Phase 10 ----------------
+  phone: z.string().trim().max(30).optional(),
+  whatsapp: z.string().trim().max(30).optional(),
+  email: z.string().trim().max(160).optional(),
+  address: z.string().trim().max(300).optional(),
+  city: z.string().trim().max(100).optional(),
+  area: z.string().trim().max(100).optional(),
+  googleMapsUrl: z.string().trim().max(500).optional(),
+  timezone: z.string().trim().max(60).optional(),
+  currency: z.string().trim().max(10).optional(),
+  deliveryEnabled: z.boolean().optional(),
+  pickupEnabled: z.boolean().optional(),
+  deliveryFee: z.number().min(0).optional(),
+  freeDeliveryAboveAmount: z.number().min(0).nullable().optional(),
+  minOrderAmount: z.number().min(0).optional(),
+  taxPercentage: z.number().min(0).max(100).optional(),
+  onlinePaymentEnabled: z.boolean().optional(),
+  easypaisaEnabled: z.boolean().optional(),
+  easypaisaNumber: z.string().trim().max(20).optional(),
+  easypaisaAccountName: z.string().trim().max(100).optional(),
+  jazzcashEnabled: z.boolean().optional(),
+  jazzcashNumber: z.string().trim().max(20).optional(),
+  jazzcashAccountName: z.string().trim().max(100).optional(),
+  paymentInstructions: z.string().trim().max(400).optional(),
+  isAcceptingOrders: z.boolean().optional(),
+  openingHours: z
+    .record(
+      z.string(),
+      z.object({
+        open: z.string(),
+        close: z.string(),
+        closed: z.boolean().optional(),
+      })
+    )
+    .optional(),
+});
+
+export const deliveryAreaSchema = z.object({
+  name: z.string().trim().min(1, 'Area name is required').max(100),
+  deliveryFee: z.number().min(0),
+  minOrderAmount: z.number().min(0).nullable().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
+export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+export type ReviewInput = z.infer<typeof reviewSchema>;
