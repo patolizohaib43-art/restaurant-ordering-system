@@ -7,12 +7,16 @@ import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { formatCurrency } from '@/utils';
+import { paymentMethodLabel, paymentStatusLabel, PAYMENT_STATUS_STYLES } from '@/lib/payment-labels';
 
 interface OrderRow {
   id: string;
   orderNumber: string;
   status: string;
   orderType: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  paymentProvider: string | null;
   customerName: string;
   customerPhone: string;
   totalAmount: string;
@@ -127,6 +131,18 @@ export function OrdersListClient() {
                     <p className="text-xs text-gray-400">{order.customerPhone}</p>
                   </div>
                   <StatusBadge status={order.status} />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-gray-600">
+                    {paymentMethodLabel(order.paymentMethod, order.paymentProvider, order.orderType)}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      PAYMENT_STATUS_STYLES[order.paymentStatus] ?? 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {paymentStatusLabel(order.paymentMethod, order.paymentStatus)}
+                  </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
                   <span>

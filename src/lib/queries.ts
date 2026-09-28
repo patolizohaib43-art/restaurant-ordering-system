@@ -122,6 +122,7 @@ export async function getOrderByTrackingToken(token: string) {
     orderType: order.orderType,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
+    paymentProvider: order.paymentProvider,
     customerName: order.customerName,
     deliveryAddress: order.deliveryAddress,
     area: order.area,

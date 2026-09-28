@@ -39,12 +39,35 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       );
     }
 
+    // An online (Easypaisa/JazzCash) order can't be closed as delivered
+    // until the admin has verified the payment — never count unverified
+    // money as a completed sale.
+    const isFinal = status === 'DELIVERED' || status === 'COMPLETED';
+    if (isFinal && order.paymentMethod === 'ONLINE_WALLET' && order.paymentStatus !== 'PAID') {
+      return apiError(
+        'Verify the online payment (Confirm Payment) before marking this order as delivered.',
+        422
+      );
+    }
+
     const session = await getAdminSession();
 
     const updated = await db.$transaction(async (tx) => {
       const result = await tx.order.update({
         where: { id: params.id },
-        data: { status },
+        data: {
+          status,
+          // Cash on Delivery: delivering the order = cash collected.
+          ...(isFinal &&
+            order.paymentMethod === 'CASH_ON_DELIVERY' &&
+            order.paymentStatus === 'PENDING' && {
+              paymentStatus: 'PAID' as const,
+              paymentVerifiedAt: new Date(),
+            }),
+          ...(status === 'REFUNDED' && order.paymentStatus === 'PAID' && {
+            paymentStatus: 'REFUNDED' as const,
+          }),
+        },
       });
       await tx.orderStatusHistory.create({
         data: {

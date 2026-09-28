@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
         orderType: o.orderType,
         paymentMethod: o.paymentMethod,
         paymentStatus: o.paymentStatus,
+        paymentProvider: o.paymentProvider,
         customerName: o.customerName,
         customerPhone: o.customerPhone,
         totalAmount: o.totalAmount.toString(),

@@ -7,12 +7,13 @@ import { getRestaurantSettings } from '@/lib/settings';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const { timezone } = await getRestaurantSettings();
+    const { timezone, openingHours } = await getRestaurantSettings();
     const range = resolveDateRange(
       searchParams.get('range'),
       searchParams.get('from'),
       searchParams.get('to'),
-      timezone
+      timezone,
+      openingHours
     );
 
     const [coupons, deals] = await Promise.all([getCouponAnalytics(range), getDealPerformance(range)]);

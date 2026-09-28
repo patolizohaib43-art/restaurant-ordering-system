@@ -22,6 +22,10 @@ export interface PublicSettings {
   timezone: string;
   isAcceptingOrders: boolean;
   isOpenNow: boolean;
+  onlinePayment?: {
+    providers: { key: 'EASYPAISA' | 'JAZZCASH'; label: string; number: string; accountName: string }[];
+    instructions: string;
+  };
 }
 
 const SettingsContext = createContext<PublicSettings | null>(null);

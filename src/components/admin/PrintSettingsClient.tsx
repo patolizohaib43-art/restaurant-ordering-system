@@ -14,6 +14,7 @@ import {
   Percent,
   Bell,
   MapPin,
+  Smartphone,
 } from 'lucide-react';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { ImageUploadField } from '@/components/admin/ImageUploadField';
@@ -50,6 +51,14 @@ interface OperationalSettings {
   taxPercentage: string;
   isAcceptingOrders: boolean;
   openingHours: OpeningHours | null;
+  onlinePaymentEnabled: boolean;
+  easypaisaEnabled: boolean;
+  easypaisaNumber: string;
+  easypaisaAccountName: string;
+  jazzcashEnabled: boolean;
+  jazzcashNumber: string;
+  jazzcashAccountName: string;
+  paymentInstructions: string;
 }
 
 const WIDTH_OPTIONS: { value: 'MM_58' | 'MM_80'; label: string; hint: string }[] = [
@@ -175,6 +184,7 @@ export function PrintSettingsClient() {
       <BusinessSection settings={settings} onSave={save} />
       <DeliverySection settings={settings} onSave={save} />
       <TaxSection settings={settings} onSave={save} />
+      <OnlinePaymentSection settings={settings} onSave={save} />
       <NotificationsSection settings={settings} onSave={save} />
 
       {/* Receipt width */}
@@ -502,6 +512,109 @@ function BusinessSection({ settings, onSave }: SectionProps) {
       <p className="mt-1.5 text-[11px] text-gray-400">
         Timezone controls how order times, reports, and receipts display — not the device&apos;s
         own clock. Takes effect immediately, no redeploy needed.
+      </p>
+    </section>
+  );
+}
+
+// ---------------- ONLINE PAYMENT (Easypaisa / JazzCash) ----------------
+function OnlinePaymentSection({ settings, onSave }: SectionProps) {
+  const [epNumber, setEpNumber] = useState(settings.easypaisaNumber);
+  const [epName, setEpName] = useState(settings.easypaisaAccountName);
+  const [jcNumber, setJcNumber] = useState(settings.jazzcashNumber);
+  const [jcName, setJcName] = useState(settings.jazzcashAccountName);
+  const [instructions, setInstructions] = useState(settings.paymentInstructions);
+
+  useEffect(() => setEpNumber(settings.easypaisaNumber), [settings.easypaisaNumber]);
+  useEffect(() => setEpName(settings.easypaisaAccountName), [settings.easypaisaAccountName]);
+  useEffect(() => setJcNumber(settings.jazzcashNumber), [settings.jazzcashNumber]);
+  useEffect(() => setJcName(settings.jazzcashAccountName), [settings.jazzcashAccountName]);
+  useEffect(() => setInstructions(settings.paymentInstructions), [settings.paymentInstructions]);
+
+  return (
+    <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Smartphone size={16} className="text-brand-600" />
+        <h2 className="text-sm font-semibold text-gray-900">Online Payment (Easypaisa / JazzCash)</h2>
+      </div>
+
+      <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Enable Online Payment</p>
+          <p className="text-xs text-gray-500">
+            Customers see this option at checkout next to Cash on Delivery.
+          </p>
+        </div>
+        <Toggle
+          checked={settings.onlinePaymentEnabled}
+          onChange={(v) => onSave({ onlinePaymentEnabled: v })}
+        />
+      </div>
+
+      {/* Easypaisa */}
+      <div className="mt-4 rounded-xl border border-gray-100 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-900">Easypaisa</p>
+          <Toggle checked={settings.easypaisaEnabled} onChange={(v) => onSave({ easypaisaEnabled: v })} />
+        </div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Account Number</label>
+        <input
+          value={epNumber}
+          onChange={(e) => setEpNumber(e.target.value)}
+          onBlur={() => epNumber !== settings.easypaisaNumber && onSave({ easypaisaNumber: epNumber.trim() })}
+          className="input mb-3"
+          placeholder="03XX XXXXXXX"
+          type="tel"
+        />
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Account Title</label>
+        <input
+          value={epName}
+          onChange={(e) => setEpName(e.target.value)}
+          onBlur={() => epName !== settings.easypaisaAccountName && onSave({ easypaisaAccountName: epName.trim() })}
+          className="input"
+          placeholder="Account holder name"
+        />
+      </div>
+
+      {/* JazzCash */}
+      <div className="mt-3 rounded-xl border border-gray-100 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-900">JazzCash</p>
+          <Toggle checked={settings.jazzcashEnabled} onChange={(v) => onSave({ jazzcashEnabled: v })} />
+        </div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Account Number</label>
+        <input
+          value={jcNumber}
+          onChange={(e) => setJcNumber(e.target.value)}
+          onBlur={() => jcNumber !== settings.jazzcashNumber && onSave({ jazzcashNumber: jcNumber.trim() })}
+          className="input mb-3"
+          placeholder="03XX XXXXXXX"
+          type="tel"
+        />
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Account Title</label>
+        <input
+          value={jcName}
+          onChange={(e) => setJcName(e.target.value)}
+          onBlur={() => jcName !== settings.jazzcashAccountName && onSave({ jazzcashAccountName: jcName.trim() })}
+          className="input"
+          placeholder="Account holder name"
+        />
+      </div>
+
+      <label className="mb-1.5 mt-3 block text-sm font-medium text-gray-700">
+        Note for customers (optional)
+      </label>
+      <textarea
+        value={instructions}
+        onChange={(e) => setInstructions(e.target.value)}
+        onBlur={() => instructions !== settings.paymentInstructions && onSave({ paymentInstructions: instructions.trim() })}
+        className="input resize-none"
+        rows={2}
+        placeholder="e.g. Send the exact total amount and keep the SMS."
+      />
+      <p className="mt-1.5 text-[11px] text-gray-400">
+        A method is shown to customers only when it is switched on AND has an account number. Online
+        orders stay &quot;Awaiting verification&quot; until you press Confirm Payment on the order.
       </p>
     </section>
   );

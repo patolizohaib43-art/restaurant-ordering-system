@@ -26,6 +26,18 @@ interface DashboardData {
   cancelledCount: number;
   todaySales: string;
   totalSales: string;
+  todaySale: {
+    sessionStart: string;
+    sessionEnd: string;
+    isOpenNow: boolean;
+    completedOrders: number;
+    totalSales: string;
+    codOrders: number;
+    codAmount: string;
+    onlineOrders: number;
+    onlineAmount: string;
+    activeOrders: number;
+  };
   recentOrders: {
     id: string;
     orderNumber: string;
@@ -50,6 +62,14 @@ const REFRESH_MS = 30000;
 export function DashboardClient() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState(false);
+  const [timezone, setTimezone] = useState<string>('Asia/Karachi');
+
+  useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => j.success && j.data.timezone && setTimezone(j.data.timezone))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -119,6 +139,63 @@ export function DashboardClient() {
             {formatCurrency(data.totalSales, 'PKR')}
           </p>
         </div>
+      </div>
+
+      {/* Today Sale — one BUSINESS DAY session (e.g. 6 PM → 2 AM) */}
+      <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Today Sale</h2>
+            <p className="text-[11px] text-gray-400">
+              {new Intl.DateTimeFormat(undefined, {
+                day: 'numeric',
+                month: 'short',
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZone: timezone,
+              }).format(new Date(data.todaySale.sessionStart))}{' '}
+              →{' '}
+              {new Intl.DateTimeFormat(undefined, {
+                day: 'numeric',
+                month: 'short',
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZone: timezone,
+              }).format(new Date(data.todaySale.sessionEnd))}
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              data.todaySale.isOpenNow ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {data.todaySale.isOpenNow ? 'Open' : 'Closed — last session'}
+          </span>
+        </div>
+        <div className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Completed orders</span>
+            <span className="font-semibold text-gray-900">{data.todaySale.completedOrders}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Total sales</span>
+            <span className="font-bold text-gray-900">{formatCurrency(data.todaySale.totalSales, 'PKR')}</span>
+          </div>
+          <div className="flex justify-between border-t border-dashed border-gray-200 pt-2">
+            <span className="text-gray-500">Cash on Delivery ({data.todaySale.codOrders})</span>
+            <span className="font-semibold text-gray-900">{formatCurrency(data.todaySale.codAmount, 'PKR')}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Online payment ({data.todaySale.onlineOrders})</span>
+            <span className="font-semibold text-gray-900">{formatCurrency(data.todaySale.onlineAmount, 'PKR')}</span>
+          </div>
+        </div>
+        {data.todaySale.activeOrders > 0 && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+            {data.todaySale.activeOrders} order{data.todaySale.activeOrders > 1 ? 's are' : ' is'} still in
+            progress — not counted until completed.
+          </p>
+        )}
       </div>
 
       {/* Order status stats */}

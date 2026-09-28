@@ -2,6 +2,8 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { resolveDateRange, getSalesTotals, SALES_EXCLUDED_STATUSES } from '@/lib/reports';
 import { getRestaurantSettings } from '@/lib/settings';
+import { getBusinessHours, getBusinessSession } from '@/lib/business-day';
+import { getSessionSale } from '@/lib/today-sale';
 
 /**
  * Item 9 — Admin Reports Dashboard summary: today / yesterday / this week /
@@ -11,12 +13,12 @@ import { getRestaurantSettings } from '@/lib/settings';
 export async function GET() {
   try {
     const noFilters = {};
-    const { timezone } = await getRestaurantSettings();
+    const { timezone, openingHours } = await getRestaurantSettings();
 
     const [today, yesterday, thisWeek, thisMonth, totalOrders, completedOrders, cancelledOrders, rejectedOrders] =
       await Promise.all([
-        getSalesTotals(resolveDateRange('today', null, null, timezone), noFilters),
-        getSalesTotals(resolveDateRange('yesterday', null, null, timezone), noFilters),
+        getSalesTotals(resolveDateRange('today', null, null, timezone, openingHours), noFilters),
+        getSalesTotals(resolveDateRange('yesterday', null, null, timezone, openingHours), noFilters),
         getSalesTotals(resolveDateRange('last7', null, null, timezone), noFilters),
         getSalesTotals(resolveDateRange('thisMonth', null, null, timezone), noFilters),
         db.order.count(),
@@ -25,13 +27,18 @@ export async function GET() {
         db.order.count({ where: { status: 'REJECTED' } }),
       ]);
 
+    // Headline "today" figure = COMPLETED sales of the current business
+    // session, identical to the Dashboard's Today Sale card.
+    const session = getBusinessSession(new Date(), timezone, getBusinessHours(openingHours));
+    const todaySale = await getSessionSale(session);
+
     const overallAgg = await db.order.aggregate({
       where: { status: { notIn: [...SALES_EXCLUDED_STATUSES] } },
       _avg: { totalAmount: true },
     });
 
     return apiSuccess({
-      todaySales: today.totalSales,
+      todaySales: todaySale.totalSales,
       yesterdaySales: yesterday.totalSales,
       thisWeekSales: thisWeek.totalSales,
       thisMonthSales: thisMonth.totalSales,

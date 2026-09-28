@@ -1,8 +1,15 @@
 import { z } from 'zod';
 
-export const orderLookupSchema = z.object({
-  phone: z.string().trim().min(6).max(30),
-});
+// Track by mobile number and/or the tracking tokens of orders placed on
+// this device. At least one is required.
+export const orderLookupSchema = z
+  .object({
+    phone: z.string().trim().min(6).max(30).optional(),
+    tokens: z.array(z.string().min(10).max(100)).max(10).optional(),
+  })
+  .refine((d) => !!d.phone || (d.tokens && d.tokens.length > 0), {
+    message: 'Enter your mobile number.',
+  });
 
 export const adminLoginSchema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -66,7 +73,24 @@ export const createOrderSchema = z.object({
   deliveryInstructions: z.string().max(300).optional(),
   couponCode: z.string().max(30).optional(),
   dealId: z.string().min(1).optional(),
-  paymentMethod: z.enum(['CASH_ON_DELIVERY', 'CARD', 'ONLINE_WALLET']),
+  // Only Cash on Delivery and manual wallet payment (Easypaisa/JazzCash)
+  // are supported — there is no card gateway, so CARD is rejected.
+  paymentMethod: z.enum(['CASH_ON_DELIVERY', 'ONLINE_WALLET']).default('CASH_ON_DELIVERY'),
+  paymentProvider: z.enum(['EASYPAISA', 'JAZZCASH']).optional(),
+  paymentReference: z
+    .string()
+    .trim()
+    .min(6, 'Enter the transaction ID from your payment receipt')
+    .max(40)
+    .regex(/^[A-Za-z0-9\-_]+$/, 'Transaction ID can only contain letters and numbers')
+    .optional(),
+  paymentSenderNumber: z
+    .string()
+    .trim()
+    .min(7, 'Enter the mobile number you paid from')
+    .max(20)
+    .regex(/^[0-9+\-\s()]+$/, 'Enter a valid mobile number')
+    .optional(),
   items: z.array(
     z.object({
       productId: z.string().min(1),
@@ -89,7 +113,15 @@ export const createOrderSchema = z.object({
 }).refine((data) => data.items.length > 0 || (data.dealBundles && data.dealBundles.length > 0), {
   message: 'Order must contain at least one item',
   path: ['items'],
-});
+}).refine(
+  (data) =>
+    data.paymentMethod !== 'ONLINE_WALLET' ||
+    (!!data.paymentProvider && !!data.paymentReference && !!data.paymentSenderNumber),
+  {
+    message: 'For online payment, choose Easypaisa or JazzCash and enter your transaction ID and paying number.',
+    path: ['paymentReference'],
+  }
+);
 
 export const couponValidateSchema = z.object({
   code: z.string().min(1).max(30),
@@ -126,6 +158,14 @@ export const printSettingsSchema = z.object({
   freeDeliveryAboveAmount: z.number().min(0).nullable().optional(),
   minOrderAmount: z.number().min(0).optional(),
   taxPercentage: z.number().min(0).max(100).optional(),
+  onlinePaymentEnabled: z.boolean().optional(),
+  easypaisaEnabled: z.boolean().optional(),
+  easypaisaNumber: z.string().trim().max(20).optional(),
+  easypaisaAccountName: z.string().trim().max(100).optional(),
+  jazzcashEnabled: z.boolean().optional(),
+  jazzcashNumber: z.string().trim().max(20).optional(),
+  jazzcashAccountName: z.string().trim().max(100).optional(),
+  paymentInstructions: z.string().trim().max(400).optional(),
   isAcceptingOrders: z.boolean().optional(),
   openingHours: z
     .record(

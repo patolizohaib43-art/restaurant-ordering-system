@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Loader2, Star, Clock } from 'lucide-react';
+import { RefreshCw, Loader2, Star, Clock, CheckCircle2, Wallet } from 'lucide-react';
 import { OrderStatusTimeline } from '@/components/customer/OrderStatusTimeline';
 import { NotificationPrompt } from '@/components/customer/NotificationPrompt';
 import { ErrorState } from '@/components/shared/ErrorState';
@@ -10,6 +10,8 @@ import { useSettings } from '@/components/customer/SettingsProvider';
 import { formatCurrency } from '@/utils';
 import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '@/lib/format-timezone';
 import type { OrderDetailView } from '@/lib/queries';
+import { rememberPlacedOrder } from '@/utils/recent-orders';
+import { paymentMethodLabel, paymentStatusLabel, PAYMENT_STATUS_STYLES } from '@/lib/payment-labels';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -44,6 +46,12 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const previousStatus = useRef<string | null>(null);
+  const [justPlaced, setJustPlaced] = useState(false);
+
+  // Right after checkout the customer lands here with ?placed=1.
+  useEffect(() => {
+    setJustPlaced(new URLSearchParams(window.location.search).get('placed') === '1');
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +79,9 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
         }
       }
       previousStatus.current = nextOrder.status;
+
+      // Keep this order findable from the Track tab after a refresh/close.
+      rememberPlacedOrder({ token: params.token, orderNumber: nextOrder.orderNumber });
 
       setOrder(nextOrder);
       setError(null);
@@ -171,6 +182,20 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
         </button>
       </div>
 
+      {justPlaced && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-green-200 bg-green-50 p-3.5">
+          <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-green-600" />
+          <div>
+            <p className="text-sm font-bold text-green-800">Order placed successfully!</p>
+            <p className="text-xs text-green-700">
+              {order.paymentMethod === 'ONLINE_WALLET'
+                ? 'We will verify your payment and confirm your order shortly.'
+                : 'The restaurant has received your order.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <NotificationPrompt trackingToken={params.token} />
 
       <div
@@ -242,6 +267,22 @@ export default function TrackOrderPage({ params }: { params: { token: string } }
               <span>{formatCurrency(order.totalAmount, currency)}</span>
             </div>
           </div>
+          <div className="flex items-center justify-between gap-2 border-t border-dashed border-gray-200 pt-3 text-sm">
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <Wallet size={14} />
+              {paymentMethodLabel(order.paymentMethod, order.paymentProvider, order.orderType)}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                PAYMENT_STATUS_STYLES[order.paymentStatus] ?? 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {paymentStatusLabel(order.paymentMethod, order.paymentStatus)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400">
+            Ordered {formatDateTimeInTimeZone(order.createdAt, timezone)}
+          </p>
         </div>
       </div>
 

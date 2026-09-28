@@ -1,17 +1,18 @@
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
-import { getRestaurantTimeZone, startOfDayInTimeZone } from '@/lib/timezone';
 import { getRestaurantSettings } from '@/lib/settings';
+import { getBusinessHours, getBusinessSession } from '@/lib/business-day';
+import { getSessionSale } from '@/lib/today-sale';
 
 export async function GET() {
   try {
     const now = new Date();
-    // "Today" is computed in the restaurant's configured timezone (see
-    // src/lib/timezone.ts) so this figure always matches the Reports
-    // page's "Today" figure, regardless of server/deployment timezone.
-    // Prefers the admin-editable Settings value over the env var.
-    const { timezone } = await getRestaurantSettings();
-    const todayStart = startOfDayInTimeZone(now, getRestaurantTimeZone(timezone));
+    // "Today" = the restaurant's BUSINESS DAY session (e.g. 6 PM → 2 AM),
+    // computed in the restaurant's configured timezone — see
+    // src/lib/business-day.ts. Not the calendar date.
+    const { timezone, openingHours } = await getRestaurantSettings();
+    const session = getBusinessSession(now, timezone, getBusinessHours(openingHours));
+    const todaySale = await getSessionSale(session);
 
     const [
       ordersToday,
@@ -19,20 +20,15 @@ export async function GET() {
       preparingCount,
       completedCount,
       cancelledCount,
-      todaySalesAgg,
       totalSalesAgg,
       recentOrders,
       recentReviews,
     ] = await Promise.all([
-      db.order.count({ where: { createdAt: { gte: todayStart } } }),
+      db.order.count({ where: { createdAt: { gte: session.start, lt: session.end } } }),
       db.order.count({ where: { status: 'PENDING' } }),
       db.order.count({ where: { status: { in: ['CONFIRMED', 'PREPARING'] } } }),
       db.order.count({ where: { status: { in: ['DELIVERED', 'COMPLETED'] } } }),
       db.order.count({ where: { status: { in: ['CANCELLED', 'REJECTED'] } } }),
-      db.order.aggregate({
-        _sum: { totalAmount: true },
-        where: { createdAt: { gte: todayStart }, status: { notIn: ['CANCELLED', 'REJECTED'] } },
-      }),
       db.order.aggregate({
         _sum: { totalAmount: true },
         where: { status: { notIn: ['CANCELLED', 'REJECTED'] } },
@@ -62,7 +58,8 @@ export async function GET() {
       preparingCount,
       completedCount,
       cancelledCount,
-      todaySales: (todaySalesAgg._sum.totalAmount ?? 0).toString(),
+      todaySales: todaySale.totalSales,
+      todaySale,
       totalSales: (totalSalesAgg._sum.totalAmount ?? 0).toString(),
       recentOrders: recentOrders.map((o) => ({
         id: o.id,

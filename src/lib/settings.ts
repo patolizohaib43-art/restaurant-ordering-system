@@ -106,6 +106,14 @@ export async function getAdminOperationalSettings() {
     taxPercentage: settings.taxPercentage.toString(),
     isAcceptingOrders: settings.isAcceptingOrders,
     openingHours: settings.openingHours as OpeningHours | null,
+    onlinePaymentEnabled: settings.onlinePaymentEnabled,
+    easypaisaEnabled: settings.easypaisaEnabled,
+    easypaisaNumber: settings.easypaisaNumber ?? '',
+    easypaisaAccountName: settings.easypaisaAccountName ?? '',
+    jazzcashEnabled: settings.jazzcashEnabled,
+    jazzcashNumber: settings.jazzcashNumber ?? '',
+    jazzcashAccountName: settings.jazzcashAccountName ?? '',
+    paymentInstructions: settings.paymentInstructions ?? '',
   };
 }
 
@@ -136,6 +144,14 @@ export interface UpdatePrintSettingsInput {
   taxPercentage?: number;
   isAcceptingOrders?: boolean;
   openingHours?: OpeningHours;
+  onlinePaymentEnabled?: boolean;
+  easypaisaEnabled?: boolean;
+  easypaisaNumber?: string;
+  easypaisaAccountName?: string;
+  jazzcashEnabled?: boolean;
+  jazzcashNumber?: string;
+  jazzcashAccountName?: string;
+  paymentInstructions?: string;
 }
 
 /** Updates the Phase 4 print/notification fields plus basic brand profile fields. */
@@ -175,12 +191,58 @@ export async function updatePrintSettings(input: UpdatePrintSettingsInput) {
       ...(input.minOrderAmount !== undefined && { minOrderAmount: input.minOrderAmount }),
       ...(input.taxPercentage !== undefined && { taxPercentage: input.taxPercentage }),
       ...(input.isAcceptingOrders !== undefined && { isAcceptingOrders: input.isAcceptingOrders }),
+      ...(input.onlinePaymentEnabled !== undefined && { onlinePaymentEnabled: input.onlinePaymentEnabled }),
+      ...(input.easypaisaEnabled !== undefined && { easypaisaEnabled: input.easypaisaEnabled }),
+      ...(input.easypaisaNumber !== undefined && { easypaisaNumber: input.easypaisaNumber || null }),
+      ...(input.easypaisaAccountName !== undefined && { easypaisaAccountName: input.easypaisaAccountName || null }),
+      ...(input.jazzcashEnabled !== undefined && { jazzcashEnabled: input.jazzcashEnabled }),
+      ...(input.jazzcashNumber !== undefined && { jazzcashNumber: input.jazzcashNumber || null }),
+      ...(input.jazzcashAccountName !== undefined && { jazzcashAccountName: input.jazzcashAccountName || null }),
+      ...(input.paymentInstructions !== undefined && { paymentInstructions: input.paymentInstructions || null }),
       ...(input.openingHours !== undefined && {
         openingHours: input.openingHours as unknown as Prisma.InputJsonValue,
       }),
     },
   });
   return updated;
+}
+
+export type WalletProviderKey = 'EASYPAISA' | 'JAZZCASH';
+
+/**
+ * Wallet accounts the customer may pay into. A provider is offered only
+ * when the admin enabled it AND entered an account number. Account
+ * numbers are meant to be public (the customer must send money to
+ * them); nothing secret is stored or exposed here.
+ */
+export function getEnabledWalletProviders(settings: {
+  onlinePaymentEnabled: boolean;
+  easypaisaEnabled: boolean;
+  easypaisaNumber: string | null;
+  easypaisaAccountName: string | null;
+  jazzcashEnabled: boolean;
+  jazzcashNumber: string | null;
+  jazzcashAccountName: string | null;
+}) {
+  if (!settings.onlinePaymentEnabled) return [];
+  const providers: { key: WalletProviderKey; label: string; number: string; accountName: string }[] = [];
+  if (settings.easypaisaEnabled && settings.easypaisaNumber?.trim()) {
+    providers.push({
+      key: 'EASYPAISA',
+      label: 'Easypaisa',
+      number: settings.easypaisaNumber.trim(),
+      accountName: settings.easypaisaAccountName?.trim() ?? '',
+    });
+  }
+  if (settings.jazzcashEnabled && settings.jazzcashNumber?.trim()) {
+    providers.push({
+      key: 'JAZZCASH',
+      label: 'JazzCash',
+      number: settings.jazzcashNumber.trim(),
+      accountName: settings.jazzcashAccountName?.trim() ?? '',
+    });
+  }
+  return providers;
 }
 
 export async function getPublicSettings() {
@@ -210,5 +272,9 @@ export async function getPublicSettings() {
     timezone: getRestaurantTimeZone(settings.timezone),
     isAcceptingOrders: settings.isAcceptingOrders,
     isOpenNow,
+    onlinePayment: {
+      providers: getEnabledWalletProviders(settings),
+      instructions: settings.paymentInstructions ?? '',
+    },
   };
 }

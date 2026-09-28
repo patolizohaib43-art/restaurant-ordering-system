@@ -7,6 +7,8 @@ import { generateOrderNumber, generateSecureToken } from '@/lib/tokens';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { formatCurrency } from '@/utils';
 import { sendPushToAllAdmins } from '@/lib/push';
+import { normalizePhone } from '@/lib/phone';
+import { getRestaurantSettings, getEnabledWalletProviders } from '@/lib/settings';
 
 // Abuse protection: caps how many orders a single IP can place in a short
 // window (a genuine customer never needs more than this). See
@@ -34,6 +36,30 @@ export async function POST(request: NextRequest) {
       return apiError('Delivery address is required for delivery orders.');
     }
 
+    // Online payment (Easypaisa / JazzCash): the provider must currently be
+    // enabled by the admin, and the same transaction ID can never be
+    // reused on another order. The order is saved as payment PENDING —
+    // it is only marked PAID when an admin verifies the transaction.
+    const isOnline = input.paymentMethod === 'ONLINE_WALLET';
+    if (isOnline) {
+      const settings = await getRestaurantSettings();
+      const providers = getEnabledWalletProviders(settings);
+      if (!providers.some((p) => p.key === input.paymentProvider)) {
+        return apiError('That online payment option is not available right now.', 422);
+      }
+      const duplicate = await db.order.findFirst({
+        where: {
+          paymentProvider: input.paymentProvider,
+          paymentReference: { equals: input.paymentReference!, mode: 'insensitive' },
+          paymentStatus: { not: 'FAILED' },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return apiError('This transaction ID has already been used for another order.', 409);
+      }
+    }
+
     // Server-side price recomputation — the ONLY source of truth for totals.
     const pricing = await priceOrder(input.items, {
       orderType: input.orderType,
@@ -54,6 +80,7 @@ export async function POST(request: NextRequest) {
           trackingToken,
           customerName: input.customerName.trim(),
           customerPhone: input.customerPhone.trim(),
+          customerPhoneNormalized: normalizePhone(input.customerPhone),
           customerEmail: input.customerEmail?.trim() || null,
           orderType: input.orderType,
           deliveryAddress: input.deliveryAddress?.trim() || null,
@@ -70,6 +97,11 @@ export async function POST(request: NextRequest) {
           paymentMethod: input.paymentMethod,
           status: 'PENDING',
           paymentStatus: 'PENDING',
+          ...(isOnline && {
+            paymentProvider: input.paymentProvider,
+            paymentReference: input.paymentReference!.trim(),
+            paymentSenderNumber: input.paymentSenderNumber!.trim(),
+          }),
           items: {
             create: pricing.items.map((item) => ({
               productId: item.productId,
@@ -114,7 +146,7 @@ export async function POST(request: NextRequest) {
         data: {
           type: 'NEW_ORDER',
           title: 'New Order Received',
-          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount.toString(), 'PKR')}\n${orderTypeLabel}`,
+          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount.toString(), 'PKR')}\n${orderTypeLabel}${isOnline ? ` • ${input.paymentProvider === 'JAZZCASH' ? 'JazzCash' : 'Easypaisa'} — verify payment` : ' • Cash'}`,
           relatedOrderId: created.id,
         },
       });
@@ -132,7 +164,7 @@ export async function POST(request: NextRequest) {
       order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in';
     await sendPushToAllAdmins({
       title: 'Zaiqa-e-Sindh',
-      body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})`,
+      body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})${isOnline ? ' • Online payment' : ''}`,
       tag: `order-${order.id}`,
       data: { orderId: order.id, orderNumber: order.orderNumber, url: `/admin/orders/${order.id}` },
     });

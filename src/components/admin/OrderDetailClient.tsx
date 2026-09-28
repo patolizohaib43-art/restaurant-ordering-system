@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Phone, MapPin, CreditCard, StickyNote, Printer } from 'lucide-react';
+import { Loader2, Phone, MapPin, CreditCard, StickyNote, Printer, ShieldCheck } from 'lucide-react';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { OrderStatusTimeline } from '@/components/customer/OrderStatusTimeline';
 import { ErrorState } from '@/components/shared/ErrorState';
 import { VALID_TRANSITIONS, ORDER_STATUS_LABELS } from '@/lib/order-status';
 import { formatCurrency } from '@/utils';
+import { paymentMethodLabel, paymentStatusLabel, PAYMENT_STATUS_STYLES } from '@/lib/payment-labels';
 
 interface OrderDetail {
   id: string;
@@ -16,6 +17,11 @@ interface OrderDetail {
   orderType: 'DELIVERY' | 'PICKUP' | 'DINE_IN';
   paymentMethod: string;
   paymentStatus: string;
+  paymentProvider: string | null;
+  paymentReference: string | null;
+  paymentSenderNumber: string | null;
+  paymentVerifiedAt: string | null;
+  paymentNote: string | null;
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
@@ -57,6 +63,8 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
   const [note, setNote] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -96,6 +104,39 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
       setUpdateError('Network error. Please try again.');
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  async function applyPayment(action: 'MARK_PAID' | 'MARK_FAILED') {
+    if (
+      action === 'MARK_PAID' &&
+      !window.confirm(
+        order?.paymentMethod === 'ONLINE_WALLET'
+          ? 'Confirm you have received this payment in your Easypaisa/JazzCash account?'
+          : 'Confirm the cash for this order has been received?'
+      )
+    ) {
+      return;
+    }
+    if (action === 'MARK_FAILED' && !window.confirm('Mark this payment as failed / not received?')) return;
+    setIsPaying(true);
+    setPayError(null);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/payment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setPayError(json.error ?? 'Could not update payment.');
+        return;
+      }
+      await load();
+    } catch {
+      setPayError('Network error. Please try again.');
+    } finally {
+      setIsPaying(false);
     }
   }
 
@@ -158,9 +199,104 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
           </p>
         )}
         <p className="flex items-center gap-2 text-sm text-gray-600">
-          <CreditCard size={14} /> {order.paymentMethod === 'CASH_ON_DELIVERY' ? 'Cash' : order.paymentMethod} ·{' '}
+          <CreditCard size={14} />{' '}
           {order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in'}
         </p>
+      </div>
+
+      {/* Payment */}
+      <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">Payment</h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-gray-500">Payment Method</span>
+            <span className="font-medium text-gray-900">
+              {paymentMethodLabel(order.paymentMethod, order.paymentProvider, order.orderType)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-gray-500">Payment Status</span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                PAYMENT_STATUS_STYLES[order.paymentStatus] ?? 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {paymentStatusLabel(order.paymentMethod, order.paymentStatus)}
+            </span>
+          </div>
+          {order.paymentMethod === 'ONLINE_WALLET' && (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-500">Amount to verify</span>
+                <span className="font-bold text-gray-900">{formatCurrency(order.totalAmount, 'PKR')}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-500">Transaction ID</span>
+                <span className="break-all font-mono font-semibold text-gray-900">
+                  {order.paymentReference ?? '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-500">Paid from</span>
+                <span className="font-medium text-gray-900">{order.paymentSenderNumber ?? '—'}</span>
+              </div>
+            </>
+          )}
+          {order.paymentVerifiedAt && (
+            <p className="text-xs text-gray-400">
+              Confirmed{' '}
+              {new Intl.DateTimeFormat(undefined, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                timeZone: order.timezone,
+              }).format(new Date(order.paymentVerifiedAt))}
+            </p>
+          )}
+          {order.paymentNote && order.paymentStatus === 'FAILED' && (
+            <p className="text-xs text-red-600">{order.paymentNote}</p>
+          )}
+        </div>
+
+        {order.paymentStatus !== 'PAID' &&
+          order.paymentStatus !== 'REFUNDED' &&
+          !['CANCELLED', 'REJECTED', 'REFUNDED'].includes(order.status) && (
+            <div className="mt-3">
+              {order.paymentMethod === 'ONLINE_WALLET' && (
+                <p className="mb-2 text-xs text-amber-700">
+                  Check your {order.paymentProvider === 'JAZZCASH' ? 'JazzCash' : 'Easypaisa'} app/SMS for
+                  this transaction ID and amount before confirming.
+                </p>
+              )}
+              <div className="flex gap-2">
+                {order.paymentMethod === 'ONLINE_WALLET' && order.paymentStatus !== 'FAILED' && (
+                  <button
+                    type="button"
+                    onClick={() => applyPayment('MARK_FAILED')}
+                    disabled={isPaying}
+                    className="h-11 flex-1 rounded-xl border border-red-300 text-sm font-semibold text-red-600 disabled:opacity-40"
+                  >
+                    Not Received
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => applyPayment('MARK_PAID')}
+                  disabled={isPaying}
+                  className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-600 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {isPaying ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <ShieldCheck size={16} />{' '}
+                      {order.paymentMethod === 'ONLINE_WALLET' ? 'Confirm Payment' : 'Mark Cash Received'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        {payError && <p className="mt-2 text-xs text-red-600">{payError}</p>}
       </div>
 
       {/* Items */}

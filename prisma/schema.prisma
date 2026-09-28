@@ -55,6 +55,14 @@ enum PaymentMethod {
   ONLINE_WALLET
 }
 
+// Manual wallet payments (customer sends money to the restaurant's own
+// Easypaisa / JazzCash account, admin verifies). Used with
+// PaymentMethod.ONLINE_WALLET.
+enum PaymentProvider {
+  EASYPAISA
+  JAZZCASH
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -257,6 +265,9 @@ model Order {
 
   customerName  String
   customerPhone String
+  // Digits-only, canonical form (e.g. 03001234567) used for phone-based
+  // order tracking lookups. Nullable so pre-existing orders keep working.
+  customerPhoneNormalized String?
   customerEmail String?
 
   orderType            OrderType @default(DELIVERY)
@@ -290,6 +301,14 @@ model Order {
   paymentMethod PaymentMethod @default(CASH_ON_DELIVERY)
   paymentStatus PaymentStatus @default(PENDING)
 
+  // Online (Easypaisa / JazzCash) manual-payment details. All nullable —
+  // Cash on Delivery orders never set these.
+  paymentProvider      PaymentProvider?
+  paymentReference     String? // customer-entered transaction ID (TID)
+  paymentSenderNumber  String? // wallet number the customer paid from
+  paymentVerifiedAt    DateTime?
+  paymentNote          String?
+
   estimatedDeliveryTime DateTime?
 
   items         OrderItem[]
@@ -305,6 +324,8 @@ model Order {
   @@index([createdAt])
   @@index([status, createdAt])
   @@index([dealId])
+  @@index([customerPhoneNormalized])
+  @@index([paymentProvider, paymentReference])
   @@map("orders")
 }
 
@@ -503,6 +524,18 @@ model RestaurantSettings {
   // src/lib/timezone.ts. Admin-editable from Settings so it no longer
   // requires a code/env change and redeploy to correct.
   timezone          String? @default("Asia/Karachi")
+
+  // ---------------- Online payment (manual wallet) ----------------
+  // Customer pays into these accounts themselves; admin verifies the
+  // transaction ID and marks the order paid. No secret keys involved.
+  onlinePaymentEnabled  Boolean @default(false)
+  easypaisaEnabled      Boolean @default(false)
+  easypaisaNumber       String?
+  easypaisaAccountName  String?
+  jazzcashEnabled       Boolean @default(false)
+  jazzcashNumber        String?
+  jazzcashAccountName   String?
+  paymentInstructions   String?
 
   // ---------------- Phase 4: printing & notifications ----------------
   // Which thermal paper width the admin's printer uses. Drives the

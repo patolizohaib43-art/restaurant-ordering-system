@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bike, Store, Loader2, Banknote, Tag } from 'lucide-react';
+import { Bike, Store, Loader2, Banknote, Tag, Smartphone, Copy, Check } from 'lucide-react';
 import { useCart } from '@/components/customer/CartProvider';
 import { useSettings } from '@/components/customer/SettingsProvider';
 import { PriceSummary } from '@/components/customer/PriceSummary';
 import { cn, formatCurrency } from '@/utils';
+import { rememberPlacedOrder } from '@/utils/recent-orders';
 
 type OrderType = 'DELIVERY' | 'PICKUP';
 
@@ -22,7 +23,20 @@ export function CheckoutForm() {
     deliveryFee: deliveryFeeStr,
     freeDeliveryAboveAmount,
     taxPercentage: taxPercentageStr,
+    onlinePayment,
   } = useSettings();
+
+  // Online payment = the customer sends money to the restaurant's own
+  // Easypaisa / JazzCash account (configured by the admin) and enters the
+  // transaction ID. Nothing is marked paid until the admin verifies it.
+  const walletProviders = onlinePayment?.providers ?? [];
+  const [paymentMethod, setPaymentMethod] = useState<'CASH_ON_DELIVERY' | 'ONLINE_WALLET'>(
+    'CASH_ON_DELIVERY'
+  );
+  const [walletKey, setWalletKey] = useState<'EASYPAISA' | 'JAZZCASH' | ''>('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentSender, setPaymentSender] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [customerName, setCustomerName] = useState('');
@@ -108,15 +122,33 @@ export function CheckoutForm() {
   const taxAmount = subtotalAfterDiscount * (taxPercentage / 100);
   const total = subtotalAfterDiscount + deliveryFee + taxAmount;
 
+  const selectedWallet = walletProviders.find((p) => p.key === walletKey) ?? null;
+
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
+    if (paymentMethod === 'ONLINE_WALLET') {
+      if (!selectedWallet) return false;
+      if (paymentReference.trim().length < 6 || paymentSender.trim().length < 7) return false;
+    }
     if (!customerName.trim() || !customerPhone.trim()) return false;
     if (orderType === 'DELIVERY' && !deliveryAddress.trim()) return false;
     if (orderType === 'DELIVERY' && deliveryAreas && deliveryAreas.length > 0 && !selectedAreaId) {
       return false;
     }
     return true;
-  }, [items.length, customerName, customerPhone, orderType, deliveryAddress, deliveryAreas, selectedAreaId]);
+  }, [
+    items.length,
+    customerName,
+    customerPhone,
+    orderType,
+    deliveryAddress,
+    deliveryAreas,
+    selectedAreaId,
+    paymentMethod,
+    selectedWallet,
+    paymentReference,
+    paymentSender,
+  ]);
 
   if (isHydrated && items.length === 0) {
     router.replace('/cart');
@@ -143,7 +175,12 @@ export function CheckoutForm() {
           deliveryInstructions: instructions.trim() || undefined,
           couponCode: couponFromCart || undefined,
           dealId: dealFromCart || undefined,
-          paymentMethod: 'CASH_ON_DELIVERY',
+          paymentMethod,
+          ...(paymentMethod === 'ONLINE_WALLET' && {
+            paymentProvider: walletKey,
+            paymentReference: paymentReference.trim(),
+            paymentSenderNumber: paymentSender.trim(),
+          }),
           items: items
             .filter((i) => !i.dealId)
             .map((i) => ({
@@ -168,8 +205,15 @@ export function CheckoutForm() {
         return;
       }
 
+      // Remember the order + phone on this device, then go straight to
+      // live order tracking for it.
+      rememberPlacedOrder({
+        token: json.data.trackingToken,
+        orderNumber: json.data.orderNumber,
+        phone: customerPhone.trim(),
+      });
       clearCart();
-      router.push(`/order-confirmation/${json.data.trackingToken}`);
+      router.push(`/track/${json.data.trackingToken}?placed=1`);
     } catch {
       setError('Network error. Please check your connection and try again.');
       setIsSubmitting(false);
@@ -285,12 +329,144 @@ export function CheckoutForm() {
       {/* Payment method */}
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold text-gray-900">Payment method</h2>
-        <div className="flex items-center gap-3 rounded-2xl border-2 border-brand-600 bg-brand-50 px-4 py-3.5">
-          <Banknote size={20} className="text-brand-700" />
-          <span className="text-sm font-semibold text-brand-700">
-            {orderType === 'DELIVERY' ? 'Cash on Delivery' : 'Cash on Pickup'}
-          </span>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setPaymentMethod('CASH_ON_DELIVERY')}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left',
+              paymentMethod === 'CASH_ON_DELIVERY'
+                ? 'border-brand-600 bg-brand-50'
+                : 'border-gray-200'
+            )}
+          >
+            <Banknote
+              size={20}
+              className={paymentMethod === 'CASH_ON_DELIVERY' ? 'text-brand-700' : 'text-gray-400'}
+            />
+            <span
+              className={cn(
+                'text-sm font-semibold',
+                paymentMethod === 'CASH_ON_DELIVERY' ? 'text-brand-700' : 'text-gray-500'
+              )}
+            >
+              {orderType === 'DELIVERY' ? 'Cash on Delivery' : 'Cash on Pickup'}
+            </span>
+          </button>
+
+          {walletProviders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMethod('ONLINE_WALLET');
+                if (!walletKey) setWalletKey(walletProviders[0].key);
+              }}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left',
+                paymentMethod === 'ONLINE_WALLET' ? 'border-brand-600 bg-brand-50' : 'border-gray-200'
+              )}
+            >
+              <Smartphone
+                size={20}
+                className={paymentMethod === 'ONLINE_WALLET' ? 'text-brand-700' : 'text-gray-400'}
+              />
+              <span
+                className={cn(
+                  'text-sm font-semibold',
+                  paymentMethod === 'ONLINE_WALLET' ? 'text-brand-700' : 'text-gray-500'
+                )}
+              >
+                Online Payment ({walletProviders.map((p) => p.label).join(' / ')})
+              </span>
+            </button>
+          )}
         </div>
+
+        {paymentMethod === 'ONLINE_WALLET' && (
+          <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4">
+            {walletProviders.length > 1 && (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                {walletProviders.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setWalletKey(p.key)}
+                    className={cn(
+                      'h-11 rounded-xl border-2 text-sm font-semibold',
+                      walletKey === p.key
+                        ? 'border-brand-600 bg-brand-50 text-brand-700'
+                        : 'border-gray-200 text-gray-500'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedWallet && (
+              <>
+                <p className="text-xs text-gray-500">
+                  Send <strong className="text-gray-900">{formatCurrency(total, currency)}</strong> to this{' '}
+                  {selectedWallet.label} account, then enter the details below:
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-base font-bold tracking-wide text-gray-900">
+                      {selectedWallet.number}
+                    </p>
+                    {selectedWallet.accountName && (
+                      <p className="truncate text-xs text-gray-500">{selectedWallet.accountName}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(selectedWallet.number);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      } catch {
+                        /* clipboard unavailable — number is still visible */
+                      }
+                    }}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 active:bg-gray-50"
+                  >
+                    {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                {onlinePayment?.instructions && (
+                  <p className="mt-2 text-xs text-gray-500">{onlinePayment.instructions}</p>
+                )}
+
+                <div className="mt-3 space-y-3">
+                  <Field label="Your number (paid from)" required>
+                    <input
+                      value={paymentSender}
+                      onChange={(e) => setPaymentSender(e.target.value)}
+                      placeholder="e.g. 03001234567"
+                      type="tel"
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="Transaction ID (TID)" required>
+                    <input
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                      placeholder="From your payment confirmation SMS"
+                      className="input"
+                      autoCapitalize="characters"
+                    />
+                  </Field>
+                </div>
+                <p className="mt-2 text-[11px] text-gray-400">
+                  Your order is confirmed after the restaurant verifies your payment.
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Order summary */}

@@ -6,6 +6,7 @@ import { getPublicSettings } from '@/lib/settings';
 import { CopyTrackingLink } from '@/components/customer/CopyTrackingLink';
 import { RecentOrderRecorder } from '@/components/customer/RecentOrderRecorder';
 import { formatCurrency } from '@/utils';
+import { paymentMethodLabel, paymentStatusLabel } from '@/lib/payment-labels';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,13 @@ export default async function OrderConfirmationPage({ params }: { params: { toke
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs uppercase tracking-wide text-gray-400">Payment</span>
           <span className="text-sm font-medium text-gray-700">
-            {order.orderType === 'DELIVERY' ? 'Cash on Delivery' : 'Cash on Pickup'}
+            {paymentMethodLabel(order.paymentMethod, order.paymentProvider, order.orderType)}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs uppercase tracking-wide text-gray-400">Payment status</span>
+          <span className="text-sm font-medium text-gray-700">
+            {paymentStatusLabel(order.paymentMethod, order.paymentStatus)}
           </span>
         </div>
       </div>

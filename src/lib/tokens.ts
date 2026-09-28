@@ -19,8 +19,19 @@ export function generateSecureToken(bytes = 24): string {
  * count and the insert are consistent.
  */
 export async function generateOrderNumber(tx: {
-  order: { count: () => Promise<number> };
+  order: {
+    count: () => Promise<number>;
+    findUnique: (args: { where: { orderNumber: string }; select: { id: true } }) => Promise<unknown>;
+  };
 }): Promise<string> {
-  const existingCount = await tx.order.count();
-  return `ORD-${1000 + existingCount + 1}`;
+  // Count-based numbering, but skip any number that already exists so
+  // that deleting old orders (e.g. the admin "clear test orders" reset)
+  // can never cause a duplicate order number.
+  let n = (await tx.order.count()) + 1;
+  for (let i = 0; i < 1000; i++, n++) {
+    const candidate = `ORD-${1000 + n}`;
+    const taken = await tx.order.findUnique({ where: { orderNumber: candidate }, select: { id: true } });
+    if (!taken) return candidate;
+  }
+  throw new Error('Could not allocate an order number.');
 }
