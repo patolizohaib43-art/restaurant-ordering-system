@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getRestaurantSettings } from '@/lib/settings';
-import { getBusinessHours, getBusinessSession } from '@/lib/business-day';
+import { getBusinessSession } from '@/lib/business-day';
 import { getSessionSale } from '@/lib/today-sale';
 
 export async function GET() {
@@ -11,7 +11,7 @@ export async function GET() {
     // computed in the restaurant's configured timezone — see
     // src/lib/business-day.ts. Not the calendar date.
     const { timezone, openingHours } = await getRestaurantSettings();
-    const session = getBusinessSession(now, timezone, getBusinessHours(openingHours));
+    const session = getBusinessSession(now, timezone, openingHours);
     const todaySale = await getSessionSale(session);
 
     const [

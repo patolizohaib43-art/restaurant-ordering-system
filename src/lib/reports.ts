@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { getRestaurantTimeZone, startOfDayInTimeZone, startOfMonthInTimeZone, getDatePartsInTimeZone } from '@/lib/timezone';
-import { getBusinessSession, getBusinessHours } from '@/lib/business-day';
+import { getBusinessSession } from '@/lib/business-day';
 
 /**
  * Orders in these statuses never counted as real revenue (order never
@@ -39,14 +39,13 @@ export function resolveDateRange(
   const now = new Date();
   // "Today"/"Yesterday" follow the restaurant's BUSINESS DAY (e.g. 6 PM →
   // 2 AM), not the calendar date — see src/lib/business-day.ts.
-  const hours = getBusinessHours(openingHours);
   const timeZone = getRestaurantTimeZone(timeZoneOverride);
   const todayStart = startOfDay(now, timeZoneOverride);
   const todayEnd = new Date(todayStart.getTime() + DAY_MS - 1);
 
   switch (range) {
     case 'yesterday': {
-      const prev = getBusinessSession(now, timeZoneOverride, hours, 1);
+      const prev = getBusinessSession(now, timeZoneOverride, openingHours, 1);
       return { start: prev.start, end: new Date(prev.end.getTime() - 1), label: 'Yesterday' };
     }
     case 'last7':
@@ -64,7 +63,7 @@ export function resolveDateRange(
     }
     case 'today':
     default: {
-      const cur = getBusinessSession(now, timeZoneOverride, hours, 0);
+      const cur = getBusinessSession(now, timeZoneOverride, openingHours, 0);
       return { start: cur.start, end: new Date(cur.end.getTime() - 1), label: 'Today' };
     }
   }
