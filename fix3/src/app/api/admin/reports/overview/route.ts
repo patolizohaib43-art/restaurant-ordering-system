@@ -1,0 +1,57 @@
+import { db } from '@/lib/db';
+import { apiSuccess, apiError } from '@/lib/api-response';
+import { resolveDateRange, getSalesTotals, SALES_EXCLUDED_STATUSES } from '@/lib/reports';
+import { getRestaurantSettings } from '@/lib/settings';
+import { getBusinessSession } from '@/lib/business-day';
+import { getSessionSale } from '@/lib/today-sale';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * Item 9 — Admin Reports Dashboard summary: today / yesterday / this week /
+ * this month sales plus lifetime order counts, all computed live from the
+ * database (never hard-coded).
+ */
+export async function GET() {
+  try {
+    const noFilters = {};
+    const { timezone, openingHours } = await getRestaurantSettings();
+
+    const [today, yesterday, thisWeek, thisMonth, totalOrders, completedOrders, cancelledOrders, rejectedOrders] =
+      await Promise.all([
+        getSalesTotals(resolveDateRange('today', null, null, timezone, openingHours), noFilters),
+        getSalesTotals(resolveDateRange('yesterday', null, null, timezone, openingHours), noFilters),
+        getSalesTotals(resolveDateRange('last7', null, null, timezone), noFilters),
+        getSalesTotals(resolveDateRange('thisMonth', null, null, timezone), noFilters),
+        db.order.count(),
+        db.order.count({ where: { status: { in: ['DELIVERED', 'COMPLETED'] } } }),
+        db.order.count({ where: { status: 'CANCELLED' } }),
+        db.order.count({ where: { status: 'REJECTED' } }),
+      ]);
+
+    // Headline "today" figure = COMPLETED sales of the current business
+    // session, identical to the Dashboard's Today Sale card.
+    const session = getBusinessSession(new Date(), timezone, openingHours);
+    const todaySale = await getSessionSale(session);
+
+    const overallAgg = await db.order.aggregate({
+      where: { status: { notIn: [...SALES_EXCLUDED_STATUSES] } },
+      _avg: { totalAmount: true },
+    });
+
+    return apiSuccess({
+      todaySales: todaySale.totalSales,
+      yesterdaySales: yesterday.totalSales,
+      thisWeekSales: thisWeek.totalSales,
+      thisMonthSales: thisMonth.totalSales,
+      totalOrders,
+      completedOrders,
+      cancelledOrders,
+      rejectedOrders,
+      averageOrderValue: (overallAgg._avg.totalAmount ?? 0).toString(),
+    });
+  } catch (error) {
+    console.error('GET /api/admin/reports/overview failed:', error);
+    return apiError('Could not load reports overview.', 500);
+  }
+}

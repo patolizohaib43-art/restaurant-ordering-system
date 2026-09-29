@@ -1,0 +1,189 @@
+import { NextRequest } from 'next/server';
+import { db } from '@/lib/db';
+import { apiSuccess, apiError } from '@/lib/api-response';
+import { createOrderSchema } from '@/validation/schemas';
+import { priceOrder, PricingError } from '@/lib/pricing';
+import { generateOrderNumber, generateSecureToken } from '@/lib/tokens';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { formatCurrency } from '@/utils';
+import { sendPushToAllAdmins } from '@/lib/push';
+import { normalizePhone } from '@/lib/phone';
+import { getRestaurantSettings, getEnabledWalletProviders } from '@/lib/settings';
+
+export const dynamic = 'force-dynamic';
+
+// Abuse protection: caps how many orders a single IP can place in a short
+// window (a genuine customer never needs more than this). See
+// src/lib/rate-limit.ts for the documented single-instance limitation.
+const ORDER_ATTEMPT_LIMIT = 15;
+const ORDER_WINDOW_MS = 15 * 60 * 1000;
+
+export async function POST(request: NextRequest) {
+  try {
+    const ip = getClientIp(request);
+    const limitResult = rateLimit(`order-create:${ip}`, ORDER_ATTEMPT_LIMIT, ORDER_WINDOW_MS);
+    if (!limitResult.success) {
+      return apiError('Too many orders placed. Please try again later.', 429);
+    }
+
+    const body = await request.json();
+    const parsed = createOrderSchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(parsed.error.errors[0]?.message ?? 'Invalid order data.');
+    }
+
+    const input = parsed.data;
+
+    if (input.orderType === 'DELIVERY' && !input.deliveryAddress?.trim()) {
+      return apiError('Delivery address is required for delivery orders.');
+    }
+
+    // Online payment (Easypaisa / JazzCash): the provider must currently be
+    // enabled by the admin, and the same transaction ID can never be
+    // reused on another order. The order is saved as payment PENDING —
+    // it is only marked PAID when an admin verifies the transaction.
+    const isOnline = input.paymentMethod === 'ONLINE_WALLET';
+    if (isOnline) {
+      const settings = await getRestaurantSettings();
+      const providers = getEnabledWalletProviders(settings);
+      if (!providers.some((p) => p.key === input.paymentProvider)) {
+        return apiError('That online payment option is not available right now.', 422);
+      }
+      const duplicate = await db.order.findFirst({
+        where: {
+          paymentProvider: input.paymentProvider,
+          paymentReference: { equals: input.paymentReference!, mode: 'insensitive' },
+          paymentStatus: { not: 'FAILED' },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return apiError('This transaction ID has already been used for another order.', 409);
+      }
+    }
+
+    // Server-side price recomputation — the ONLY source of truth for totals.
+    const pricing = await priceOrder(input.items, {
+      orderType: input.orderType,
+      couponCode: input.couponCode,
+      dealId: input.dealId,
+      dealBundles: input.dealBundles,
+      deliveryAreaId: input.deliveryAreaId,
+    });
+
+    const trackingToken = generateSecureToken(24);
+
+    const order = await db.$transaction(async (tx) => {
+      const orderNumber = await generateOrderNumber(tx);
+
+      const created = await tx.order.create({
+        data: {
+          orderNumber,
+          trackingToken,
+          customerName: input.customerName.trim(),
+          customerPhone: input.customerPhone.trim(),
+          customerPhoneNormalized: normalizePhone(input.customerPhone),
+          customerEmail: input.customerEmail?.trim() || null,
+          orderType: input.orderType,
+          deliveryAddress: input.deliveryAddress?.trim() || null,
+          area: input.area?.trim() || null,
+          deliveryAreaId: input.orderType === 'DELIVERY' ? input.deliveryAreaId || null : null,
+          deliveryInstructions: input.deliveryInstructions?.trim() || null,
+          subtotal: pricing.subtotal,
+          discountAmount: pricing.discountAmount,
+          deliveryFee: pricing.deliveryFee,
+          taxAmount: pricing.taxAmount,
+          totalAmount: pricing.totalAmount,
+          couponId: pricing.couponId,
+          dealId: pricing.dealId,
+          paymentMethod: input.paymentMethod,
+          status: 'PENDING',
+          paymentStatus: 'PENDING',
+          ...(isOnline && {
+            paymentProvider: input.paymentProvider,
+            paymentReference: input.paymentReference!.trim(),
+            paymentSenderNumber: input.paymentSenderNumber!.trim(),
+          }),
+          items: {
+            create: pricing.items.map((item) => ({
+              productId: item.productId,
+              productName: item.productName,
+              unitPrice: item.unitPrice,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+              specialInstructions: item.specialInstructions ?? null,
+              dealId: item.dealId ?? null,
+              dealItemsSnapshot: item.dealItemsSnapshot ?? undefined,
+              addons: {
+                create: item.addons.map((addon) => ({
+                  addonId: addon.addonId,
+                  addonName: addon.name,
+                  price: addon.price,
+                  quantity: addon.quantity,
+                })),
+              },
+            })),
+          },
+          statusHistory: {
+            create: { status: 'PENDING', note: 'Order placed by customer.' },
+          },
+        },
+      });
+
+      if (pricing.couponId) {
+        await tx.coupon.update({
+          where: { id: pricing.couponId },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
+
+      const orderTypeLabel =
+        input.orderType === 'DELIVERY'
+          ? 'Delivery'
+          : input.orderType === 'PICKUP'
+            ? 'Pickup'
+            : 'Dine-in';
+
+      await tx.notification.create({
+        data: {
+          type: 'NEW_ORDER',
+          title: 'New Order Received',
+          message: `Order #${orderNumber}\n${input.customerName.trim()} • ${formatCurrency(pricing.totalAmount.toString(), 'PKR')}\n${orderTypeLabel}${isOnline ? ` • ${input.paymentProvider === 'JAZZCASH' ? 'JazzCash' : 'Easypaisa'} — verify payment` : ' • Cash'}`,
+          relatedOrderId: created.id,
+        },
+      });
+
+      return created;
+    });
+
+    // Awaited deliberately: on Vercel's serverless model, un-awaited
+    // ("fire and forget") work is NOT guaranteed to run — the function
+    // can be torn down the instant the response is sent, killing any
+    // pending push sends before they complete. Awaiting keeps push
+    // reliable; see sendPushToAllAdmins for why it never throws, so this
+    // can't itself fail order creation.
+    const orderTypeLabel =
+      order.orderType === 'DELIVERY' ? 'Delivery' : order.orderType === 'PICKUP' ? 'Pickup' : 'Dine-in';
+    await sendPushToAllAdmins({
+      title: 'Zaiqa-e-Sindh',
+      body: `New Order #${order.orderNumber} — ${formatCurrency(order.totalAmount.toString(), 'PKR')} (${orderTypeLabel})${isOnline ? ' • Online payment' : ''}`,
+      tag: `order-${order.id}`,
+      data: { orderId: order.id, orderNumber: order.orderNumber, url: `/admin/orders/${order.id}` },
+    });
+
+    return apiSuccess(
+      {
+        orderNumber: order.orderNumber,
+        trackingToken: order.trackingToken,
+        totalAmount: order.totalAmount.toString(),
+      },
+      201
+    );
+  } catch (error) {
+    if (error instanceof PricingError) {
+      return apiError(error.message, 422);
+    }
+    console.error('POST /api/orders failed:', error);
+    return apiError('Could not place order. Please try again.', 500);
+  }
+}
