@@ -10,6 +10,9 @@ import { sendPushToAllAdmins } from '@/lib/push';
 import { normalizePhone } from '@/lib/phone';
 import { getRestaurantSettings, getEnabledWalletProviders } from '@/lib/settings';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Abuse protection: caps how many orders a single IP can place in a short
 // window (a genuine customer never needs more than this). See
 // src/lib/rate-limit.ts for the documented single-instance limitation.

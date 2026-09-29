@@ -6,6 +6,9 @@ import { orderLookupSchema } from '@/validation/schemas';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { normalizePhone } from '@/lib/phone';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const LOOKUP_ATTEMPT_LIMIT = 60;
 const LOOKUP_WINDOW_MS = 15 * 60 * 1000;
 

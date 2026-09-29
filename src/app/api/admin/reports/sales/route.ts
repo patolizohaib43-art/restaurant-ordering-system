@@ -12,6 +12,9 @@ import {
 } from '@/lib/reports';
 import { getRestaurantSettings } from '@/lib/settings';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Items 10, 11, 12, 13, 16 & 17 — the main Sales Report. All sections share
  * one resolved date range + filter set and are computed with a single

@@ -5,6 +5,9 @@ import { getAdminSession } from '@/lib/auth';
 import { isUploadFolder } from '@/lib/uploads';
 import { isCloudinaryConfigured, uploadImageToCloudinary } from '@/lib/cloudinary';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const runtime = 'nodejs';
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB

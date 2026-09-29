@@ -50,7 +50,8 @@ export interface BusinessSession {
 
 function parseHHMM(v: string | undefined, fallback: string): number {
   const m = /^(\d{1,2}):(\d{2})/.exec(v ?? '') ?? /^(\d{1,2}):(\d{2})/.exec(fallback)!;
-  const h = Math.min(Math.max(Number(m[1]), 0), 23);
+  // "24:00" (midnight close) is valid and means end of day.
+  const h = Math.min(Math.max(Number(m[1]), 0), 24);
   const min = Math.min(Math.max(Number(m[2]), 0), 59);
   return h * 60 + min;
 }

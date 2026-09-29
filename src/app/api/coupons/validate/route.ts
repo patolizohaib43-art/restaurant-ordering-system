@@ -5,6 +5,9 @@ import { couponValidateSchema } from '@/validation/schemas';
 import { Prisma } from '@prisma/client';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Throttles coupon-code guessing attempts. See src/lib/rate-limit.ts for
 // the documented single-instance limitation on serverless hosts.
 const COUPON_ATTEMPT_LIMIT = 30;

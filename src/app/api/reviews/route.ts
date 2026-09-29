@@ -4,6 +4,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { reviewSchema } from '@/validation/schemas';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Abuse protection against review-spam scripts. See
 // src/lib/rate-limit.ts for the documented single-instance limitation.
 const REVIEW_ATTEMPT_LIMIT = 20;

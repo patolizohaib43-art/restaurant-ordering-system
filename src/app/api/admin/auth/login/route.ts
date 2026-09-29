@@ -5,6 +5,9 @@ import { adminLoginSchema } from '@/validation/schemas';
 import { verifyPassword, signAdminSession, ADMIN_SESSION_COOKIE_NAME } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days, matches default JWT_EXPIRES_IN
 
 // Brute-force protection: 10 attempts per IP per 15 minutes. See

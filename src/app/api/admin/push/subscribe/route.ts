@@ -4,6 +4,9 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAdminSession } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const subscribeSchema = z.object({
   endpoint: z.string().url(),
   keys: z.object({

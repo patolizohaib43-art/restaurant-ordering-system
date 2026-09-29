@@ -3,6 +3,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { resolveDateRange, getCouponAnalytics, getDealPerformance } from '@/lib/reports';
 import { getRestaurantSettings } from '@/lib/settings';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /** Items 14 & 15 — Deal Performance and Coupon Analytics. */
 export async function GET(request: NextRequest) {
   try {

@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { deliveryAreaSchema } from '@/validation/schemas';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const updateSchema = deliveryAreaSchema.partial();
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {

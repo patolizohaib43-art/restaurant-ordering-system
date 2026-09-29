@@ -86,7 +86,16 @@ export function DashboardClient() {
   useEffect(() => {
     load();
     const interval = setInterval(load, REFRESH_MS);
-    return () => clearInterval(interval);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', load);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', load);
+    };
   }, [load]);
 
   if (error && !data) {

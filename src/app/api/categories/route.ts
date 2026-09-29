@@ -1,6 +1,9 @@
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getActiveCategories } from '@/lib/queries';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const categories = await getActiveCategories();

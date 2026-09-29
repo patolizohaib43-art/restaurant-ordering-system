@@ -4,6 +4,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { deleteUploadedFileIfManaged } from '@/lib/uploads';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const updateSchema = z.object({
   categoryId: z.string().min(1).optional(),
   name: z.string().min(2).max(150).optional(),

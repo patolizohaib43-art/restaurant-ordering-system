@@ -15,6 +15,9 @@ import {
 } from '@/lib/reports';
 import { getRestaurantSettings } from '@/lib/settings';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Item 18 — CSV export. Every export is recomputed from the live database
  * using the same filters as the on-screen report (never a cached/stale

@@ -4,6 +4,9 @@ import { getOrderForReceipt } from '@/lib/receipt';
 import { getAdminOperationalSettings } from '@/lib/settings';
 import { getRestaurantTimeZone } from '@/lib/timezone';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const [order, settings] = await Promise.all([

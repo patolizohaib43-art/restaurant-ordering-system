@@ -4,6 +4,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { serializeProduct, getPopularProducts, getFeaturedProducts } from '@/lib/queries';
 import type { Prisma } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -5,6 +5,9 @@ import { getRestaurantSettings } from '@/lib/settings';
 import { getBusinessSession } from '@/lib/business-day';
 import { getSessionSale } from '@/lib/today-sale';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Item 9 — Admin Reports Dashboard summary: today / yesterday / this week /
  * this month sales plus lifetime order counts, all computed live from the

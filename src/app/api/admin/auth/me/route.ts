@@ -2,6 +2,9 @@ import { cookies } from 'next/headers';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { verifyAdminSession, ADMIN_SESSION_COOKIE_NAME } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   const token = cookies().get(ADMIN_SESSION_COOKIE_NAME)?.value;
   if (!token) return apiError('Not authenticated.', 401);

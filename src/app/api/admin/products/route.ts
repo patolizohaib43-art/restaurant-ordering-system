@@ -4,6 +4,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { slugify } from '@/utils';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const createSchema = z.object({
   categoryId: z.string().min(1),
   name: z.string().min(2).max(150),

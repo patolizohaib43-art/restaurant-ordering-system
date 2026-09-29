@@ -1,10 +1,14 @@
 import { NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAdminSession } from '@/lib/auth';
 import { getRestaurantSettings } from '@/lib/settings';
 import { startOfDayInTimeZone, getRestaurantTimeZone } from '@/lib/timezone';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 /**
  * Clear TEST orders / reset order history before going live.
@@ -123,6 +127,13 @@ export async function POST(request: NextRequest) {
       },
       { timeout: 60000, maxWait: 10000 }
     );
+
+    // Purge any cached render/data for order-related pages so the
+    // dashboard, orders list and reports show the cleared state.
+    for (const path of ['/admin', '/admin/orders', '/admin/reports', '/admin/notifications', '/']) {
+      revalidatePath(path);
+    }
+    revalidatePath('/admin', 'layout');
 
     return apiSuccess(result);
   } catch (error) {

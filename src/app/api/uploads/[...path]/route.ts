@@ -3,6 +3,9 @@ import { readFile, stat } from 'fs/promises';
 import path from 'path';
 import { getUploadDir } from '@/lib/uploads';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const runtime = 'nodejs';
 
 const CONTENT_TYPES: Record<string, string> = {

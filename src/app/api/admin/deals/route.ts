@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const dealSchema = z.object({
   title: z.string().min(2).max(150),
   description: z.string().max(500).optional(),

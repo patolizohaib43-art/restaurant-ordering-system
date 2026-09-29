@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const schema = z.object({
   action: z.enum(['MARK_PAID', 'MARK_FAILED']),
   note: z.string().trim().max(300).optional(),

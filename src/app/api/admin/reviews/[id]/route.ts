@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const schema = z.object({ isApproved: z.boolean() });
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {

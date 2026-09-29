@@ -3,6 +3,9 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAdminOperationalSettings, updatePrintSettings } from '@/lib/settings';
 import { printSettingsSchema } from '@/validation/schemas';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Auth for everything under /api/admin/* is already enforced by
 // src/middleware.ts, which blocks unauthenticated requests before they
 // reach this handler.

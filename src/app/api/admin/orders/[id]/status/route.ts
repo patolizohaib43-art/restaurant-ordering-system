@@ -5,6 +5,9 @@ import { isValidTransition } from '@/lib/order-status';
 import { getAdminSession } from '@/lib/auth';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const schema = z.object({
   status: z.enum([
     'CONFIRMED',

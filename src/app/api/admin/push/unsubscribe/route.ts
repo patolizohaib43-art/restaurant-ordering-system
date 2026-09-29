@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const unsubscribeSchema = z.object({ endpoint: z.string().url().nullable() });
 
 /**

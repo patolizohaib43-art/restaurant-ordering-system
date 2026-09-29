@@ -4,6 +4,9 @@ import { getRestaurantSettings } from '@/lib/settings';
 import { getBusinessSession } from '@/lib/business-day';
 import { getSessionSale } from '@/lib/today-sale';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const now = new Date();

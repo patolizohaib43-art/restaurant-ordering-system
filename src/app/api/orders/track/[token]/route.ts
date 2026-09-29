@@ -1,6 +1,9 @@
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getOrderByTrackingToken } from '@/lib/queries';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(_request: Request, { params }: { params: { token: string } }) {
   try {
     const order = await getOrderByTrackingToken(params.token);
